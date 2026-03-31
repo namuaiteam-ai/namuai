@@ -159,25 +159,83 @@ def parse_srt(path: Path) -> list[dict]:
     return cues
 
 
-def group_srt_2lines(cues: list[dict]) -> str:
-    """
-    SRT 큐를 2개씩 묶어 2줄 자막 SRT 생성.
-    - 시작: 첫 번째 큐의 start
-    - 종료: 두 번째 큐의 end (홀수 마지막은 단독)
-    """
-    result_blocks = []
-    idx = 1
+def group_srt_2lines(cues: list[dict]) -> list[dict]:
+    """SRT 큐를 2개씩 묶어 2줄 블록 리스트 반환."""
+    result = []
     i = 0
     while i < len(cues):
         pair = cues[i:i + 2]
-        start = pair[0]["start_ms"]
-        end   = pair[-1]["end_ms"]
-        # 두 줄 합치기 (이미 2줄인 큐는 그대로)
-        combined = "\n".join(c["text"] for c in pair)
-        result_blocks.append(f"{idx}\n{_ts(start)} --> {_ts(end)}\n{combined}")
-        idx += 1
+        result.append({
+            "start_ms": pair[0]["start_ms"],
+            "end_ms":   pair[-1]["end_ms"],
+            "text":     "\n".join(c["text"] for c in pair),
+        })
         i += 2
-    return "\n\n".join(result_blocks) + "\n"
+    return result
+
+
+def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
+    """
+    오디오 동기 흐르는 자막 ASS 생성.
+    각 큐 타이밍에 맞춰 오른쪽→왼쪽 스크롤 (\\move 태그).
+    2줄일 경우 위/아래 두 줄 동시 스크롤.
+    """
+    font      = cfg.get("subtitle_font",    "Arial")
+    size      = int(cfg.get("subtitle_size", 16))
+    color     = cfg.get("subtitle_color",   "&H00FFFFFF")
+    outline_c = cfg.get("subtitle_outline", "&H00000000")
+    bold      = int(cfg.get("subtitle_bold", 0))
+    line_gap  = size + 6
+
+    def ass_tc(ms: int) -> str:
+        h_, rem = divmod(ms, 3600000)
+        m_, rem = divmod(rem, 60000)
+        s_, ms_ = divmod(rem, 1000)
+        return f"{h_}:{m_:02d}:{s_:02d}.{ms_//10:02d}"
+
+    header = (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {w}\nPlayResY: {h}\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{size},{color},&H000000FF,{outline_c},"
+        f"&H80000000,{bold},0,0,0,100,100,0.5,0,1,1,0,"
+        f"2,0,0,30,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, "
+        "MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+
+    events = []
+    x_start = w + 20        # 화면 오른쪽 밖
+    x_end   = -(w + 20)     # 화면 왼쪽 밖
+
+    for cue in cues:
+        start_tc = ass_tc(cue["start_ms"])
+        end_tc   = ass_tc(cue["end_ms"])
+        lines    = [l.strip() for l in cue["text"].split("\n") if l.strip()]
+        n_lines  = min(len(lines), 2)
+
+        # 2줄 기준 y 좌표: 화면 하단에서 위로 배치
+        y_base = h - 50
+        y_positions = []
+        for li in range(n_lines):
+            y_positions.append(y_base - (n_lines - 1 - li) * line_gap)
+
+        for li, line in enumerate(lines[:2]):
+            y = y_positions[li]
+            # \an4 = 왼쪽 정렬, \move(x1,y1,x2,y2) = 전체 큐동안 스크롤
+            events.append(
+                f"Dialogue: 0,{start_tc},{end_tc},Default,,0,0,0,,"
+                f"{{\\an4\\move({x_start},{y},{x_end},{y})}}{line}"
+            )
+
+    return header + "\n".join(events) + "\n"
 
 
 # ─── 움직임 효과 필터 ─────────────────────────────────────────────────────────
@@ -397,20 +455,27 @@ def build_shorts(images: list[str], audio: str | None,
             step += 1
 
         if sub_path:
-            # SRT/VTT → 2줄 묶음 SRT 생성
-            processed_sub = sub_path
+            # SRT/VTT → 흐르는 자막 ASS 직접 생성
             if sub_path.suffix.lower() in (".srt", ".vtt"):
                 cues = parse_srt(sub_path)
                 if cues:
-                    two_line_srt = tmp / "subtitle_2lines.srt"
-                    two_line_srt.write_text(
-                        group_srt_2lines(cues), encoding="utf-8"
+                    grouped = group_srt_2lines(cues)
+                    scrolling_ass = tmp / "subtitle_scroll.ass"
+                    w = cfg["width"]
+                    h = cfg["height"]
+                    scrolling_ass.write_text(
+                        make_scrolling_ass(grouped, w, h, cfg),
+                        encoding="utf-8"
                     )
-                    processed_sub = two_line_srt
+                    processed_sub = scrolling_ass
                     if progress_cb:
                         progress_cb(step, total_steps,
-                            f"자막 2줄 묶음 완료 ({len(cues)}개 → "
-                            f"{(len(cues)+1)//2}개 블록)")
+                            f"흐르는 자막 생성 ({len(cues)}개 큐 → "
+                            f"{len(grouped)}개 2줄 블록)")
+                else:
+                    processed_sub = sub_path
+            else:
+                processed_sub = sub_path
 
             with_sub = tmp / "with_sub.mp4"
             add_subtitles(current, processed_sub, with_sub,
@@ -421,8 +486,14 @@ def build_shorts(images: list[str], audio: str | None,
         if progress_cb:
             progress_cb(step, total_steps, "최종 인코딩 중...")
 
+        audio_dur = cfg.get("_audio_duration")
         cmd_final = [
             "ffmpeg", "-y", "-i", str(current),
+        ]
+        # 오디오 길이로 정확히 트림
+        if audio_dur:
+            cmd_final += ["-t", f"{audio_dur:.3f}"]
+        cmd_final += [
             "-c:v", "libx264", "-preset", "slow",
             "-crf", str(cfg["crf"]),
             "-profile:v", "high", "-level", "4.0",
