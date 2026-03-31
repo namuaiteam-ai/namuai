@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+shorts_jobs/
+output/
+test_assets/
+*.mp4
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.mp3
+*.wav
+*.m4a
+*.aac
