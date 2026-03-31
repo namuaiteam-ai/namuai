@@ -151,6 +151,21 @@
   .sub-btn:hover { border-color: #bbb; }
   .sub-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 
+  /* ── 오디오 동기화 뱃지 ── */
+  .sync-badge {
+    font-size: 10px; font-weight: 600;
+    background: #e8f0fe; color: #4a7cf6;
+    padding: 2px 7px; border-radius: 10px;
+    margin-left: 6px; vertical-align: middle;
+  }
+  .sync-info {
+    background: #f0f4ff; border: 1px solid #c7d7fd;
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 12px; color: #3a5fc8; margin-top: 10px;
+    display: none;
+  }
+  .sync-info strong { font-weight: 700; }
+
   /* ── 이미지 미리보기 그리드 ── */
   .img-preview-grid {
     display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
@@ -280,8 +295,8 @@
     <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.aac">
     <div class="upload-icon">🎵</div>
     <div class="upload-info">
-      <strong>나레이션 오디오</strong>
-      <span>MP3 · WAV · M4A · AAC</span>
+      <strong>나레이션 오디오 <span id="audioDurationBadge" class="sync-badge" style="display:none"></span></strong>
+      <span>MP3 · WAV · M4A · AAC — 업로드 시 영상 길이가 오디오에 맞춰 자동 설정됩니다</span>
       <div class="upload-filelist" id="audioList"></div>
     </div>
   </div>
@@ -292,7 +307,7 @@
     <div class="upload-icon">📝</div>
     <div class="upload-info">
       <strong>자막 파일</strong>
-      <span>SRT · VTT · ASS</span>
+      <span>SRT · VTT · ASS — 오디오와 동기화, 2줄씩 자동 표시</span>
       <div class="upload-filelist" id="subList"></div>
     </div>
   </div>
@@ -308,11 +323,17 @@
     </div>
   </div>
 
+  <!-- 오디오 동기화 안내 -->
+  <div class="sync-info" id="syncInfo">
+    🔗 <strong>오디오 동기화 활성</strong> — 영상 길이가 오디오(<span id="syncDur">?</span>초)에 맞춰 자동 설정됩니다.
+    이미지 <span id="syncImgCount">?</span>장 × <span id="syncPerImg">?</span>초 · 자막은 2줄씩 동기화됩니다.
+  </div>
+
   <!-- 영상 설정 -->
   <div class="section-title">영상 설정</div>
   <div class="settings-grid">
     <div class="settings-card">
-      <label>사진당 표시 시간 (초)</label>
+      <label>사진당 표시 시간 (초) <span id="autoSyncLabel" style="display:none;color:#4a7cf6;font-weight:600">🔗 오디오 자동</span></label>
       <div class="slider-row">
         <input type="range" id="duration" min="1" max="10" step="0.5" value="4">
         <span class="slider-value" id="durationVal">4초</span>
@@ -459,6 +480,38 @@ function removeImg(i) {
   renderImgPreviews();
 }
 
+// ── 오디오 길이 읽기 및 동기화 UI ─────────────────────────────────────────
+let audioDuration = null;
+
+function updateSyncUI() {
+  const info   = document.getElementById('syncInfo');
+  const badge  = document.getElementById('audioDurationBadge');
+  const label  = document.getElementById('autoSyncLabel');
+  const slider = document.getElementById('duration');
+  const valEl  = document.getElementById('durationVal');
+
+  if (audioDuration && imgFiles.length > 0) {
+    const perImg = (audioDuration / imgFiles.length).toFixed(2);
+    info.style.display  = 'block';
+    badge.style.display = 'inline';
+    badge.textContent   = `${audioDuration.toFixed(1)}초`;
+    label.style.display = 'inline';
+    document.getElementById('syncDur').textContent     = audioDuration.toFixed(1);
+    document.getElementById('syncImgCount').textContent = imgFiles.length;
+    document.getElementById('syncPerImg').textContent   = perImg;
+    slider.value   = Math.min(10, Math.max(1, parseFloat(perImg)));
+    valEl.textContent = parseFloat(perImg).toFixed(2) + '초';
+  } else {
+    info.style.display  = 'none';
+    badge.style.display = 'none';
+    label.style.display = 'none';
+  }
+}
+
+// 이미지 변경시 동기화 UI도 갱신
+const _origRenderImgPreviews = renderImgPreviews;
+renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
+
 // ── 단일 파일 카드 ─────────────────────────────────────────────────────────
 ['audio','sub','thumb'].forEach(id => {
   const input = document.getElementById(id + 'Input');
@@ -468,6 +521,22 @@ function removeImg(i) {
     const name  = this.files[0] ? this.files[0].name : '';
     list.textContent = name;
     card.classList.toggle('filled', !!name);
+
+    // 오디오 파일 길이 읽기
+    if (id === 'audio' && this.files[0]) {
+      const audioEl = document.createElement('audio');
+      audioEl.preload = 'metadata';
+      audioEl.onloadedmetadata = function() {
+        audioDuration = audioEl.duration;
+        URL.revokeObjectURL(audioEl.src);
+        updateSyncUI();
+      };
+      audioEl.src = URL.createObjectURL(this.files[0]);
+    }
+    if (id === 'audio' && !this.files[0]) {
+      audioDuration = null;
+      updateSyncUI();
+    }
   });
 });
 

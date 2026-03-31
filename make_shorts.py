@@ -3,11 +3,14 @@
 YouTube Shorts 영상 제작 스크립트
 - 이미지 최대 6장 + 나레이션 오디오 + 자막(SRT/VTT/ASS) → MP4 (720×1280)
 - 6가지 움직임 효과: Ken Burns, Pan, Tilt, Zoom In, Zoom Out, Shake
+- 오디오 길이 기반 영상 길이 결정 (오디오-자막-영상 완전 동기화)
+- 자막 2줄 표시 (SRT 자동 파싱 및 2개씩 묶음)
 """
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -89,6 +92,92 @@ def check_file(path: str, label: str) -> Path:
     if not p.exists():
         sys.exit(f"[오류] {label} 파일을 찾을 수 없습니다: {path}")
     return p
+
+
+def get_media_duration(path: Path) -> float:
+    """ffprobe로 미디어 파일 길이(초) 반환"""
+    cmd = [
+        "ffprobe", "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        str(path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe 오류: {result.stderr}")
+    data = json.loads(result.stdout)
+    return float(data["format"]["duration"])
+
+
+# ─── SRT 파싱 및 2줄 묶음 ─────────────────────────────────────────────────────
+def _ms(ts: str) -> int:
+    """SRT 타임스탬프 → 밀리초 (00:00:00,000)"""
+    h, m, rest = ts.strip().replace(".", ",").split(":")
+    s, ms = rest.split(",")
+    return int(h) * 3600000 + int(m) * 60000 + int(s) * 1000 + int(ms)
+
+
+def _ts(ms: int) -> str:
+    """밀리초 → SRT 타임스탬프"""
+    h, rem = divmod(ms, 3600000)
+    m, rem = divmod(rem, 60000)
+    s, ms_ = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms_:03d}"
+
+
+def parse_srt(path: Path) -> list[dict]:
+    """SRT → [{index, start_ms, end_ms, text}, ...]"""
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    # 블록 단위 분리
+    blocks = re.split(r"\n{2,}", text.strip())
+    cues = []
+    for block in blocks:
+        lines = block.strip().splitlines()
+        if len(lines) < 2:
+            continue
+        # 첫 줄이 숫자이면 인덱스
+        offset = 0
+        if lines[0].strip().isdigit():
+            offset = 1
+        if len(lines) <= offset:
+            continue
+        tc_line = lines[offset]
+        m = re.match(
+            r"(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})",
+            tc_line,
+        )
+        if not m:
+            continue
+        text_lines = "\n".join(lines[offset + 1:]).strip()
+        # HTML 태그 제거
+        text_lines = re.sub(r"<[^>]+>", "", text_lines)
+        cues.append({
+            "start_ms": _ms(m.group(1)),
+            "end_ms":   _ms(m.group(2)),
+            "text":     text_lines,
+        })
+    return cues
+
+
+def group_srt_2lines(cues: list[dict]) -> str:
+    """
+    SRT 큐를 2개씩 묶어 2줄 자막 SRT 생성.
+    - 시작: 첫 번째 큐의 start
+    - 종료: 두 번째 큐의 end (홀수 마지막은 단독)
+    """
+    result_blocks = []
+    idx = 1
+    i = 0
+    while i < len(cues):
+        pair = cues[i:i + 2]
+        start = pair[0]["start_ms"]
+        end   = pair[-1]["end_ms"]
+        # 두 줄 합치기 (이미 2줄인 큐는 그대로)
+        combined = "\n".join(c["text"] for c in pair)
+        result_blocks.append(f"{idx}\n{_ts(start)} --> {_ts(end)}\n{combined}")
+        idx += 1
+        i += 2
+    return "\n\n".join(result_blocks) + "\n"
 
 
 # ─── 움직임 효과 필터 ─────────────────────────────────────────────────────────
@@ -258,13 +347,28 @@ def build_shorts(images: list[str], audio: str | None,
 
     check_ffmpeg()
 
-    img_paths = [check_file(img, f"이미지 {i+1}") for i, img in enumerate(images[:6])]
+    img_paths  = [check_file(img, f"이미지 {i+1}") for i, img in enumerate(images[:6])]
     audio_path = check_file(audio, "오디오") if audio else None
     sub_path   = check_file(subtitle, "자막") if subtitle else None
     out_path   = Path(output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     n = len(img_paths)
+
+    # ── 오디오 길이 기반 사진 표시 시간 자동 계산 ──────────────────────────────
+    if audio_path:
+        try:
+            audio_duration = get_media_duration(audio_path)
+            cfg["photo_duration"] = round(audio_duration / n, 3)
+            cfg["_audio_duration"] = audio_duration
+            if progress_cb:
+                progress_cb(0, 1,
+                    f"오디오 길이 {audio_duration:.1f}초 → "
+                    f"사진당 {cfg['photo_duration']:.2f}초 자동 설정")
+        except Exception as e:
+            if progress_cb:
+                progress_cb(0, 1, f"오디오 길이 감지 실패, 설정값 사용: {e}")
+
     has_audio = audio_path is not None
     has_sub   = sub_path is not None
     total_steps = n + 1 + (1 if has_audio else 0) + (1 if has_sub else 0) + 1
@@ -293,8 +397,23 @@ def build_shorts(images: list[str], audio: str | None,
             step += 1
 
         if sub_path:
+            # SRT/VTT → 2줄 묶음 SRT 생성
+            processed_sub = sub_path
+            if sub_path.suffix.lower() in (".srt", ".vtt"):
+                cues = parse_srt(sub_path)
+                if cues:
+                    two_line_srt = tmp / "subtitle_2lines.srt"
+                    two_line_srt.write_text(
+                        group_srt_2lines(cues), encoding="utf-8"
+                    )
+                    processed_sub = two_line_srt
+                    if progress_cb:
+                        progress_cb(step, total_steps,
+                            f"자막 2줄 묶음 완료 ({len(cues)}개 → "
+                            f"{(len(cues)+1)//2}개 블록)")
+
             with_sub = tmp / "with_sub.mp4"
-            add_subtitles(current, sub_path, with_sub,
+            add_subtitles(current, processed_sub, with_sub,
                           cfg, progress_cb, step, total_steps)
             current = with_sub
             step += 1
@@ -315,16 +434,16 @@ def build_shorts(images: list[str], audio: str | None,
         run(cmd_final, "최종 출력")
 
     size_mb = out_path.stat().st_size / 1024 / 1024
-    total_sec = n * cfg["photo_duration"]
+    total_sec = cfg.get("_audio_duration", n * cfg["photo_duration"])
 
     if progress_cb:
         progress_cb(total_steps, total_steps,
-                    f"완료! ({size_mb:.1f}MB, {total_sec:.0f}초)")
+                    f"완료! ({size_mb:.1f}MB · {total_sec:.1f}초 · 오디오 동기화)")
 
     if thumbnail:
         _extract_thumbnail(out_path, Path(thumbnail))
 
-    return {"size_mb": round(size_mb, 1), "duration_sec": total_sec,
+    return {"size_mb": round(size_mb, 1), "duration_sec": round(total_sec, 1),
             "output": str(out_path)}
 
 
