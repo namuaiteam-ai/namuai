@@ -1,0 +1,10 @@
+{
+  "width": 720,
+  "height": 1280,
+  "fps": 30,
+  "photo_duration": 4.0,
+  "transition": 0.6,
+  "zoom_ratio": 0.04,
+  "crf": 23,
+  "audio_norm": true
+}
