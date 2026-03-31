@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Shorts 영상 생성 에이전트</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* ── 헤더 ── */
+  .header {
+    background: #fff;
+    border-bottom: 1px solid #e8e8e4;
+    padding: 20px 24px 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header p  { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.5; }
+
+  /* ── 본문 ── */
+  .main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── 섹션 제목 ── */
+  .section-title {
+    font-size: 13px; font-weight: 600; color: #555;
+    margin: 24px 0 10px; letter-spacing: 0.2px;
+  }
+
+  /* ── 업로드 카드 ── */
+  .upload-card {
+    background: #fff;
+    border: 1.5px dashed #d4d4ce;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .18s, background .18s;
+    display: flex; align-items: center; gap: 14px;
+    position: relative;
+  }
+  .upload-card:hover { border-color: #999; background: #fafaf8; }
+  .upload-card.filled { border-color: #4a7cf6; border-style: solid; background: #f0f4ff; }
+  .upload-card input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: #f0f0ec; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 18px;
+  }
+  .upload-info { flex: 1; min-width: 0; }
+  .upload-info strong { font-size: 14px; font-weight: 600; display: block; }
+  .upload-info span   { font-size: 11px; color: #999; margin-top: 2px; display: block; }
+  .upload-badge {
+    font-size: 11px; background: #4a7cf6; color: #fff;
+    padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
+  }
+  .upload-filelist {
+    font-size: 11px; color: #4a7cf6; margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ── 슬라이더 그리드 ── */
+  .settings-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+  }
+  .settings-card {
+    background: #fff; border: 1px solid #e8e8e4;
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .settings-card label {
+    font-size: 12px; color: #888; display: block; margin-bottom: 10px;
+  }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  input[type=range] {
+    flex: 1; -webkit-appearance: none; height: 4px;
+    background: #e0e0da; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: #1a1a1a; cursor: pointer;
+  }
+  .slider-value {
+    font-size: 13px; font-weight: 600; min-width: 36px; text-align: right;
+  }
+  select {
+    width: 100%; border: 1px solid #e0e0da; border-radius: 8px;
+    padding: 9px 12px; font-size: 13px; background: #fff;
+    appearance: none; cursor: pointer; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 32px;
+  }
+  .select-hint { font-size: 11px; color: #aaa; margin-top: 5px; text-align: right; }
+
+  /* ── 효과 버튼 그리드 ── */
+  .effect-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-bottom: 10px;
+  }
+  .effect-btn {
+    background: #fff; border: 1.5px solid #e0e0da;
+    border-radius: 10px; padding: 14px 8px 12px;
+    cursor: pointer; text-align: center;
+    transition: all .15s; user-select: none;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .effect-btn:hover { border-color: #bbb; background: #fafaf8; }
+  .effect-btn.active {
+    border-color: #4a7cf6; background: #f0f4ff; color: #4a7cf6;
+  }
+  .effect-btn .icon { font-size: 20px; line-height: 1; }
+  .effect-btn .label { font-size: 12px; font-weight: 500; }
+
+  /* ── 자막 스타일 ── */
+  .subtitle-preview {
+    background: #111; border-radius: 12px 12px 0 0;
+    padding: 20px 18px; min-height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+  }
+  .subtitle-text {
+    color: #fff; font-size: 17px; font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0,0,0,.8);
+    white-space: nowrap;
+  }
+  .subtitle-text.scroll { animation: marquee 6s linear infinite; }
+  .subtitle-text.fade   { animation: fadeInOut 3s ease-in-out infinite; }
+  .subtitle-text.static { animation: none; }
+  @keyframes marquee    { from { transform: translateX(120%); } to { transform: translateX(-120%); } }
+  @keyframes fadeInOut  { 0%,100%{opacity:0;} 20%,80%{opacity:1;} }
+
+  .subtitle-controls {
+    background: #fff; border: 1px solid #e8e8e4;
+    border-radius: 0 0 12px 12px; padding: 12px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .sub-btn {
+    font-size: 12px; padding: 6px 14px;
+    border: 1.5px solid #e0e0da; border-radius: 20px;
+    background: #fff; cursor: pointer; transition: all .15s;
+  }
+  .sub-btn:hover { border-color: #bbb; }
+  .sub-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
+
+  /* ── 이미지 미리보기 그리드 ── */
+  .img-preview-grid {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .img-thumb {
+    width: 64px; height: 64px; object-fit: cover;
+    border-radius: 8px; border: 1px solid #e0e0da;
+  }
+  .img-thumb-del {
+    position: relative; display: inline-block;
+  }
+  .img-thumb-del button {
+    position: absolute; top: -4px; right: -4px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #ff4444; color: #fff; border: none;
+    font-size: 10px; cursor: pointer; line-height: 18px; text-align: center;
+    padding: 0;
+  }
+
+  /* ── 자막 폰트/색상 설정 ── */
+  .sub-style-row {
+    display: flex; gap: 10px; align-items: center;
+    margin-top: 10px; flex-wrap: wrap;
+  }
+  .sub-style-row label { font-size: 12px; color: #888; }
+  .sub-style-row select { width: auto; flex: 1; min-width: 120px; }
+  .sub-style-row input[type=color] {
+    width: 36px; height: 28px; border: 1px solid #e0e0da;
+    border-radius: 6px; cursor: pointer; padding: 2px;
+  }
+
+  /* ── 생성 버튼 ── */
+  .generate-wrap { margin-top: 24px; }
+  .btn-generate {
+    width: 100%; padding: 16px;
+    background: #1a1a1a; color: #fff;
+    border: none; border-radius: 12px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s; letter-spacing: -0.3px;
+  }
+  .btn-generate:hover:not(:disabled) { opacity: .85; }
+  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── 진행 ── */
+  .progress-wrap {
+    margin-top: 18px; display: none;
+  }
+  .progress-bar-bg {
+    background: #e8e8e4; border-radius: 6px; height: 8px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; background: #4a7cf6;
+    border-radius: 6px; transition: width .4s ease;
+    width: 0%;
+  }
+  .progress-msg {
+    font-size: 12px; color: #888; margin-top: 8px; text-align: center;
+  }
+
+  /* ── 결과 ── */
+  .result-wrap {
+    margin-top: 18px; display: none;
+    background: #fff; border: 1px solid #e8e8e4;
+    border-radius: 12px; padding: 20px;
+    text-align: center;
+  }
+  .result-wrap h3 { font-size: 16px; margin-bottom: 6px; }
+  .result-wrap p  { font-size: 13px; color: #888; margin-bottom: 16px; }
+  .result-preview {
+    max-width: 180px; margin: 0 auto 16px;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid #e0e0da;
+  }
+  .result-preview img { width: 100%; display: block; }
+  .btn-download {
+    display: inline-block; padding: 12px 32px;
+    background: #4a7cf6; color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    text-decoration: none; transition: opacity .15s;
+  }
+  .btn-download:hover { opacity: .85; }
+  .btn-reset {
+    display: inline-block; padding: 12px 24px;
+    background: #f0f0ec; color: #555;
+    border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    margin-left: 10px;
+  }
+
+  /* ── 에러 ── */
+  .error-msg {
+    background: #fff0f0; border: 1px solid #ffcdd2;
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px; color: #c62828; margin-top: 14px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="header">
+  <h1>YouTube Shorts 영상 생성 에이전트</h1>
+  <p>이미지 6장 · 나레이션 · 자막 파일을 업로드하면 ffmpeg 기반 영상을 제작합니다</p>
+</div>
+
+<div class="main">
+
+  <!-- 파일 업로드 -->
+  <div class="section-title">파일 업로드</div>
+
+  <!-- 이미지 -->
+  <div class="upload-card" id="imgCard">
+    <input type="file" id="imgInput" accept=".jpg,.jpeg,.png,.webp" multiple>
+    <div class="upload-icon">🖼</div>
+    <div class="upload-info">
+      <strong>이미지 파일 <span style="font-weight:400;color:#aaa;font-size:12px">(최대 6장)</span></strong>
+      <span>JPG · PNG · WEBP — 권장 1080×1920px</span>
+      <div class="upload-filelist" id="imgList"></div>
+    </div>
+  </div>
+  <div class="img-preview-grid" id="imgPreviews"></div>
+
+  <!-- 오디오 -->
+  <div class="upload-card" id="audioCard">
+    <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.aac">
+    <div class="upload-icon">🎵</div>
+    <div class="upload-info">
+      <strong>나레이션 오디오</strong>
+      <span>MP3 · WAV · M4A · AAC</span>
+      <div class="upload-filelist" id="audioList"></div>
+    </div>
+  </div>
+
+  <!-- 자막 -->
+  <div class="upload-card" id="subCard">
+    <input type="file" id="subInput" accept=".srt,.vtt,.ass">
+    <div class="upload-icon">📝</div>
+    <div class="upload-info">
+      <strong>자막 파일</strong>
+      <span>SRT · VTT · ASS</span>
+      <div class="upload-filelist" id="subList"></div>
+    </div>
+  </div>
+
+  <!-- 썸네일 -->
+  <div class="upload-card" id="thumbCard">
+    <input type="file" id="thumbInput" accept=".jpg,.jpeg,.png">
+    <div class="upload-icon">🖼</div>
+    <div class="upload-info">
+      <strong>썸네일 <span style="font-weight:400;color:#aaa;font-size:12px">(선택)</span></strong>
+      <span>JPG · PNG — 1280×720px 권장</span>
+      <div class="upload-filelist" id="thumbList"></div>
+    </div>
+  </div>
+
+  <!-- 영상 설정 -->
+  <div class="section-title">영상 설정</div>
+  <div class="settings-grid">
+    <div class="settings-card">
+      <label>사진당 표시 시간 (초)</label>
+      <div class="slider-row">
+        <input type="range" id="duration" min="1" max="10" step="0.5" value="4">
+        <span class="slider-value" id="durationVal">4초</span>
+      </div>
+    </div>
+    <div class="settings-card">
+      <label>전환 효과 길이 (초)</label>
+      <div class="slider-row">
+        <input type="range" id="transition" min="0.1" max="1.5" step="0.1" value="0.6">
+        <span class="slider-value" id="transitionVal">0.6초</span>
+      </div>
+    </div>
+    <div class="settings-card">
+      <label>해상도</label>
+      <select id="resolution">
+        <option value="720x1280" selected>720×1280</option>
+        <option value="1080x1920">1080×1920</option>
+        <option value="540x960">540×960</option>
+      </select>
+      <div class="select-hint">Shorts 표준</div>
+    </div>
+    <div class="settings-card">
+      <label>출력 포맷</label>
+      <select id="format">
+        <option value="h264" selected>MP4 (H.264)</option>
+        <option value="h265">MP4 (H.265)</option>
+      </select>
+      <div class="select-hint">유튜브 권장</div>
+    </div>
+  </div>
+
+  <!-- 사진 움직임 효과 -->
+  <div class="section-title">사진 움직임 효과</div>
+  <div class="effect-grid" id="effectGrid">
+    <button class="effect-btn active" data-effect="ken_burns">
+      <span class="icon">🔍</span><span class="label">Ken Burns (줌)</span>
+    </button>
+    <button class="effect-btn" data-effect="pan">
+      <span class="icon">↔</span><span class="label">Pan (좌우)</span>
+    </button>
+    <button class="effect-btn" data-effect="tilt">
+      <span class="icon">↕</span><span class="label">Tilt (상하)</span>
+    </button>
+    <button class="effect-btn" data-effect="zoom_in">
+      <span class="icon">⊕</span><span class="label">Zoom In</span>
+    </button>
+    <button class="effect-btn" data-effect="zoom_out">
+      <span class="icon">⊖</span><span class="label">Zoom Out</span>
+    </button>
+    <button class="effect-btn" data-effect="shake">
+      <span class="icon">〰</span><span class="label">Shake</span>
+    </button>
+  </div>
+
+  <!-- 자막 스타일 -->
+  <div class="section-title">자막 스타일</div>
+  <div>
+    <div class="subtitle-preview">
+      <span class="subtitle-text scroll" id="subPreview">자막이 흐르듯 좌에서 우로 움직입니다 ✨</span>
+    </div>
+    <div class="subtitle-controls">
+      <button class="sub-btn active" data-anim="scroll">흐르는 자막</button>
+      <button class="sub-btn" data-anim="fade">페이드인/아웃</button>
+      <button class="sub-btn" data-anim="timing">타이밍 효과</button>
+      <button class="sub-btn" data-anim="static">하단 고정</button>
+    </div>
+    <div class="sub-style-row">
+      <label>폰트</label>
+      <select id="subFont">
+        <option value="Arial">Arial</option>
+        <option value="NanumGothic">나눔고딕</option>
+        <option value="Malgun Gothic">맑은 고딕</option>
+        <option value="NanumBarunGothic">나눔바른고딕</option>
+      </select>
+      <label>색상</label>
+      <input type="color" id="subColor" value="#ffffff" title="자막 색상">
+      <label>크기</label>
+      <input type="range" id="subSize" min="14" max="36" value="22"
+             style="width:80px">
+      <span id="subSizeVal" style="font-size:12px;min-width:24px">22</span>
+    </div>
+  </div>
+
+  <!-- 생성 버튼 -->
+  <div class="generate-wrap">
+    <button class="btn-generate" id="btnGenerate">영상 제작 시작</button>
+  </div>
+
+  <!-- 진행 표시 -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-msg" id="progressMsg">처리 중...</div>
+  </div>
+
+  <!-- 에러 -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- 결과 -->
+  <div class="result-wrap" id="resultWrap">
+    <h3>✅ 영상 제작 완료!</h3>
+    <p id="resultInfo"></p>
+    <div class="result-preview" id="resultPreview"></div>
+    <a class="btn-download" id="btnDownload" href="#">다운로드</a>
+    <button class="btn-reset" id="btnReset">새로 만들기</button>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── 이미지 파일 목록 관리 ──────────────────────────────────────────────────
+const imgFiles = [];
+
+document.getElementById('imgInput').addEventListener('change', function(e) {
+  const newFiles = Array.from(e.target.files).slice(0, 6 - imgFiles.length);
+  newFiles.forEach(f => {
+    if (imgFiles.length < 6) imgFiles.push(f);
+  });
+  renderImgPreviews();
+  this.value = '';
+});
+
+function renderImgPreviews() {
+  const el = document.getElementById('imgPreviews');
+  const card = document.getElementById('imgCard');
+  document.getElementById('imgList').textContent =
+    imgFiles.length ? `${imgFiles.length}장 선택됨` : '';
+  card.classList.toggle('filled', imgFiles.length > 0);
+  el.innerHTML = '';
+  imgFiles.forEach((f, i) => {
+    const url = URL.createObjectURL(f);
+    const wrap = document.createElement('div');
+    wrap.className = 'img-thumb-del';
+    wrap.innerHTML =
+      `<img class="img-thumb" src="${url}">` +
+      `<button onclick="removeImg(${i})">✕</button>`;
+    el.appendChild(wrap);
+  });
+}
+
+function removeImg(i) {
+  imgFiles.splice(i, 1);
+  renderImgPreviews();
+}
+
+// ── 단일 파일 카드 ─────────────────────────────────────────────────────────
+['audio','sub','thumb'].forEach(id => {
+  const input = document.getElementById(id + 'Input');
+  input.addEventListener('change', function() {
+    const card  = document.getElementById(id + 'Card');
+    const list  = document.getElementById(id + 'List');
+    const name  = this.files[0] ? this.files[0].name : '';
+    list.textContent = name;
+    card.classList.toggle('filled', !!name);
+  });
+});
+
+// ── 슬라이더 ───────────────────────────────────────────────────────────────
+document.getElementById('duration').addEventListener('input', function() {
+  document.getElementById('durationVal').textContent = this.value + '초';
+});
+document.getElementById('transition').addEventListener('input', function() {
+  document.getElementById('transitionVal').textContent = this.value + '초';
+});
+document.getElementById('subSize').addEventListener('input', function() {
+  document.getElementById('subSizeVal').textContent = this.value;
+});
+
+// ── 효과 버튼 ──────────────────────────────────────────────────────────────
+let selectedEffect = 'ken_burns';
+document.getElementById('effectGrid').addEventListener('click', function(e) {
+  const btn = e.target.closest('.effect-btn');
+  if (!btn) return;
+  document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedEffect = btn.dataset.effect;
+});
+
+// ── 자막 애니메이션 버튼 ───────────────────────────────────────────────────
+let subAnim = 'scroll';
+document.querySelectorAll('.sub-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    subAnim = this.dataset.anim;
+    const el = document.getElementById('subPreview');
+    el.className = 'subtitle-text ' + (subAnim === 'timing' ? 'fade' : subAnim);
+  });
+});
+
+// ── 자막 색상 미리보기 ─────────────────────────────────────────────────────
+document.getElementById('subColor').addEventListener('input', function() {
+  document.getElementById('subPreview').style.color = this.value;
+});
+document.getElementById('subFont').addEventListener('change', function() {
+  document.getElementById('subPreview').style.fontFamily = this.value;
+});
+
+// ── 영상 제작 ──────────────────────────────────────────────────────────────
+document.getElementById('btnGenerate').addEventListener('click', startGenerate);
+
+async function startGenerate() {
+  if (imgFiles.length === 0) {
+    showError('이미지를 1장 이상 업로드해주세요.');
+    return;
+  }
+  hideError();
+  setUI('loading');
+
+  const form = new FormData();
+
+  // 이미지 (최대 6장)
+  imgFiles.forEach((f, i) => form.append(`image_${i}`, f));
+
+  // 오디오 / 자막
+  const audioFile = document.getElementById('audioInput').files[0];
+  const subFile   = document.getElementById('subInput').files[0];
+  if (audioFile) form.append('audio',    audioFile);
+  if (subFile)   form.append('subtitle', subFile);
+
+  // 설정
+  const [w, h] = document.getElementById('resolution').value.split('x');
+  form.append('width',      w);
+  form.append('height',     h);
+  form.append('duration',   document.getElementById('duration').value);
+  form.append('transition', document.getElementById('transition').value);
+  form.append('effect',     selectedEffect);
+  form.append('subtitle_font', document.getElementById('subFont').value);
+  form.append('subtitle_size', document.getElementById('subSize').value);
+
+  // 색상 → ASS BGR hex 변환 (#rrggbb → &H00bbggrr)
+  const hex = document.getElementById('subColor').value.slice(1);
+  const r = hex.slice(0,2), g = hex.slice(2,4), b = hex.slice(4,6);
+  form.append('subtitle_color', `&H00${b}${g}${r}`.toUpperCase());
+
+  try {
+    const res = await fetch('/generate', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) { showError(data.error); setUI('idle'); return; }
+    listenProgress(data.job_id);
+  } catch (e) {
+    showError('서버 연결 오류: ' + e.message);
+    setUI('idle');
+  }
+}
+
+function listenProgress(jobId) {
+  const es = new EventSource(`/progress/${jobId}`);
+
+  es.onmessage = function(e) {
+    const d = JSON.parse(e.data);
+    if (d.error) { showError(d.error); setUI('idle'); es.close(); return; }
+
+    document.getElementById('progressFill').style.width = d.pct + '%';
+    document.getElementById('progressMsg').textContent  = d.msg;
+
+    if (d.status === 'done') {
+      es.close();
+      showResult(jobId, d.msg);
+    } else if (d.status === 'error') {
+      es.close();
+      showError(d.msg);
+      setUI('idle');
+    }
+  };
+
+  es.onerror = function() {
+    es.close();
+    // SSE 종료 후 status API로 최종 확인
+    setTimeout(() => checkStatus(jobId), 1000);
+  };
+}
+
+async function checkStatus(jobId) {
+  try {
+    const res = await fetch(`/status/${jobId}`);
+    const d = await res.json();
+    if (d.status === 'done')  showResult(jobId, d.message);
+    else if (d.status === 'error') { showError(d.message); setUI('idle'); }
+    else setTimeout(() => checkStatus(jobId), 1500);
+  } catch(e) { setTimeout(() => checkStatus(jobId), 2000); }
+}
+
+function showResult(jobId, msg) {
+  setUI('done');
+  document.getElementById('resultInfo').textContent = msg;
+  document.getElementById('btnDownload').href = `/download/${jobId}`;
+
+  // 썸네일 로드
+  const preview = document.getElementById('resultPreview');
+  const img = document.createElement('img');
+  img.src = `/thumbnail/${jobId}?t=${Date.now()}`;
+  img.onerror = () => preview.style.display = 'none';
+  preview.innerHTML = '';
+  preview.appendChild(img);
+}
+
+// ── UI 상태 제어 ────────────────────────────────────────────────────────────
+function setUI(state) {
+  const btn  = document.getElementById('btnGenerate');
+  const prog = document.getElementById('progressWrap');
+  const res  = document.getElementById('resultWrap');
+
+  if (state === 'loading') {
+    btn.disabled = true;
+    btn.textContent = '제작 중...';
+    prog.style.display = 'block';
+    res.style.display  = 'none';
+  } else if (state === 'done') {
+    btn.disabled = false;
+    btn.textContent = '영상 제작 시작';
+    prog.style.display = 'none';
+    res.style.display  = 'block';
+  } else {
+    btn.disabled = false;
+    btn.textContent = '영상 제작 시작';
+    prog.style.display = 'none';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('errorMsg').style.display = 'none';
+}
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  setUI('idle');
+  document.getElementById('resultWrap').style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressMsg').textContent = '처리 중...';
+});
+</script>
+</body>
+</html>
