@@ -176,26 +176,30 @@ def group_srt_2lines(cues: list[dict]) -> list[dict]:
 
 def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
     """
-    오디오 동기 흐르는 자막 ASS 생성.
-    각 큐 타이밍에 맞춰 오른쪽→왼쪽 스크롤 (\\move 태그).
-    2줄일 경우 위/아래 두 줄 동시 스크롤.
+    흐르는 자막 ASS 생성 — 3단계 애니메이션
+      1단계 (300ms): 오른쪽 밖 → 화면 중앙  (슬라이드 인)
+      2단계 (유지):  화면 중앙에 고정        (읽기 구간)
+      3단계 (300ms): 화면 중앙 → 왼쪽 밖    (슬라이드 아웃)
+    큐가 짧으면 fade 처리로 대체.
     """
     font      = cfg.get("subtitle_font",    "Arial")
     size      = int(cfg.get("subtitle_size", 16))
     color     = cfg.get("subtitle_color",   "&H00FFFFFF")
     outline_c = cfg.get("subtitle_outline", "&H00000000")
     bold      = int(cfg.get("subtitle_bold", 0))
-    line_gap  = size + 6
 
-    def ass_tc(ms: int) -> str:
-        h_, rem = divmod(ms, 3600000)
-        m_, rem = divmod(rem, 60000)
-        s_, ms_ = divmod(rem, 1000)
-        return f"{h_}:{m_:02d}:{s_:02d}.{ms_//10:02d}"
+    SLIDE_MS = 300          # 슬라이드 구간 (ms)
+    cx       = w // 2       # 화면 중앙 x  (\an2 기준)
+    y_pos    = h - 50       # 하단 y
+
+    def tc(ms: int) -> str:
+        h_, r = divmod(ms, 3600000)
+        m_, r = divmod(r,  60000)
+        s_, f = divmod(r,  1000)
+        return f"{h_}:{m_:02d}:{s_:02d}.{f//10:02d}"
 
     header = (
-        "[Script Info]\n"
-        "ScriptType: v4.00+\n"
+        "[Script Info]\nScriptType: v4.00+\n"
         f"PlayResX: {w}\nPlayResY: {h}\n"
         "ScaledBorderAndShadow: yes\n\n"
         "[V4+ Styles]\n"
@@ -204,35 +208,45 @@ def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Default,{font},{size},{color},&H000000FF,{outline_c},"
-        f"&H80000000,{bold},0,0,0,100,100,0.5,0,1,1,0,"
+        f"&H80000000,{bold},0,0,0,100,100,0,0,1,2,0,"
         f"2,0,0,30,1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, "
         "MarginL, MarginR, MarginV, Effect, Text\n"
     )
 
-    events = []
-    x_start = w + 20        # 화면 오른쪽 밖
-    x_end   = -(w + 20)     # 화면 왼쪽 밖
+    x_right = w + 60
+    x_left  = -(w + 60)
+    events  = []
 
     for cue in cues:
-        start_tc = ass_tc(cue["start_ms"])
-        end_tc   = ass_tc(cue["end_ms"])
-        lines    = [l.strip() for l in cue["text"].split("\n") if l.strip()]
-        n_lines  = min(len(lines), 2)
+        s   = cue["start_ms"]
+        e   = cue["end_ms"]
+        dur = e - s
+        # 2줄 → ASS 줄바꿈 \N
+        text = cue["text"].replace("\n", "\\N").strip()
 
-        # 2줄 기준 y 좌표: 화면 하단에서 위로 배치
-        y_base = h - 50
-        y_positions = []
-        for li in range(n_lines):
-            y_positions.append(y_base - (n_lines - 1 - li) * line_gap)
-
-        for li, line in enumerate(lines[:2]):
-            y = y_positions[li]
-            # \an4 = 왼쪽 정렬, \move(x1,y1,x2,y2) = 전체 큐동안 스크롤
+        if dur <= SLIDE_MS * 2:
+            # 큐가 너무 짧으면 fade
             events.append(
-                f"Dialogue: 0,{start_tc},{end_tc},Default,,0,0,0,,"
-                f"{{\\an4\\move({x_start},{y},{x_end},{y})}}{line}"
+                f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,"
+                f"{{\\an2\\pos({cx},{y_pos})\\fad(150,150)}}{text}"
+            )
+        else:
+            # ① 슬라이드 인: 오른쪽 밖 → 중앙 (SLIDE_MS 동안 이동 후 중앙에 멈춤)
+            events.append(
+                f"Dialogue: 0,{tc(s)},{tc(s + SLIDE_MS)},Default,,0,0,0,,"
+                f"{{\\an2\\move({x_right},{y_pos},{cx},{y_pos},0,{SLIDE_MS})}}{text}"
+            )
+            # ② 중앙 유지
+            events.append(
+                f"Dialogue: 0,{tc(s + SLIDE_MS)},{tc(e - SLIDE_MS)},Default,,0,0,0,,"
+                f"{{\\an2\\pos({cx},{y_pos})}}{text}"
+            )
+            # ③ 슬라이드 아웃: 중앙 → 왼쪽 밖
+            events.append(
+                f"Dialogue: 0,{tc(e - SLIDE_MS)},{tc(e)},Default,,0,0,0,,"
+                f"{{\\an2\\move({cx},{y_pos},{x_left},{y_pos},0,{SLIDE_MS})}}{text}"
             )
 
     return header + "\n".join(events) + "\n"
@@ -331,13 +345,21 @@ def concat_clips(clip_paths: list[Path], out_path: Path,
 
 
 def merge_audio(video_path: Path, audio_path: Path, out_path: Path,
-                normalize: bool, progress_cb=None, step=0, total_steps=1) -> Path:
-    af = "loudnorm=I=-16:TP=-1.5:LRA=11,apad" if normalize else "apad"
-    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-i", str(audio_path),
+                normalize: bool, audio_duration: float | None = None,
+                progress_cb=None, step=0, total_steps=1) -> Path:
+    af = "loudnorm=I=-16:TP=-1.5:LRA=11" if normalize else "anull"
+    # 오디오를 마스터로: 영상을 오디오 길이에 맞춰 자름
+    # -t 로 정확한 길이 보장, -shortest 로 오디오 끝에서 종료
+    cmd = ["ffmpeg", "-y",
+           "-i", str(video_path),
+           "-i", str(audio_path),
            "-filter_complex", f"[1:a]{af}[a]",
-           "-map", "0:v", "-map", "[a]", "-shortest",
-           "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out_path)]
-    run(cmd, "오디오 합성", progress_cb, step, total_steps)
+           "-map", "0:v", "-map", "[a]",
+           "-shortest",
+           "-c:v", "copy",
+           "-c:a", "aac", "-b:a", "192k",
+           str(out_path)]
+    run(cmd, "오디오 합성 (오디오 길이 기준)", progress_cb, step, total_steps)
     return out_path
 
 
@@ -417,12 +439,14 @@ def build_shorts(images: list[str], audio: str | None,
     if audio_path:
         try:
             audio_duration = get_media_duration(audio_path)
-            cfg["photo_duration"] = round(audio_duration / n, 3)
+            # 클립마다 1초 여유를 두어 영상이 오디오보다 항상 길게 생성
+            # → 최종 단계에서 -t audio_duration 으로 정확히 트림
+            cfg["photo_duration"] = round(audio_duration / n + 1.0, 3)
             cfg["_audio_duration"] = audio_duration
             if progress_cb:
                 progress_cb(0, 1,
-                    f"오디오 길이 {audio_duration:.1f}초 → "
-                    f"사진당 {cfg['photo_duration']:.2f}초 자동 설정")
+                    f"오디오 {audio_duration:.2f}초 → "
+                    f"사진당 {cfg['photo_duration']:.2f}초 (버퍼 포함)")
         except Exception as e:
             if progress_cb:
                 progress_cb(0, 1, f"오디오 길이 감지 실패, 설정값 사용: {e}")
@@ -450,7 +474,9 @@ def build_shorts(images: list[str], audio: str | None,
         if audio_path:
             with_audio = tmp / "with_audio.mp4"
             merge_audio(merged, audio_path, with_audio,
-                        cfg["audio_norm"], progress_cb, step, total_steps)
+                        cfg["audio_norm"],
+                        cfg.get("_audio_duration"),
+                        progress_cb, step, total_steps)
             current = with_audio
             step += 1
 
@@ -487,10 +513,8 @@ def build_shorts(images: list[str], audio: str | None,
             progress_cb(step, total_steps, "최종 인코딩 중...")
 
         audio_dur = cfg.get("_audio_duration")
-        cmd_final = [
-            "ffmpeg", "-y", "-i", str(current),
-        ]
-        # 오디오 길이로 정확히 트림
+        cmd_final = ["ffmpeg", "-y", "-i", str(current)]
+        # 오디오 길이로 정확히 트림 (버퍼 제거)
         if audio_dur:
             cmd_final += ["-t", f"{audio_dur:.3f}"]
         cmd_final += [
@@ -502,7 +526,7 @@ def build_shorts(images: list[str], audio: str | None,
             "-ar", "44100", "-pix_fmt", "yuv420p",
             str(out_path),
         ]
-        run(cmd_final, "최종 출력")
+        run(cmd_final, f"최종 출력 (길이: {audio_dur:.2f}초)" if audio_dur else "최종 출력")
 
     size_mb = out_path.stat().st_size / 1024 / 1024
     total_sec = cfg.get("_audio_duration", n * cfg["photo_duration"])
