@@ -56,11 +56,30 @@ def run(cmd: list[str], desc: str = "") -> subprocess.CompletedProcess:
 
 
 def check_ffmpeg():
-    try:
-        r = subprocess.run(["ffmpeg", "-version"], capture_output=True)
-        assert r.returncode == 0
-    except (FileNotFoundError, AssertionError):
-        sys.exit("[오류] ffmpeg가 설치되어 있지 않습니다.\n  설치: sudo apt install ffmpeg  또는  brew install ffmpeg")
+    import shutil
+    import platform
+
+    # winget 설치 경로 등 Windows 일반 경로 추가 탐색
+    if platform.system() == "Windows":
+        extra_paths = [
+            r"C:\ffmpeg\bin",
+            r"C:\Program Files\ffmpeg\bin",
+            os.path.expanduser(r"~\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin"),
+        ]
+        for p in extra_paths:
+            if os.path.isfile(os.path.join(p, "ffmpeg.exe")):
+                os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
+                break
+
+    if shutil.which("ffmpeg") is None:
+        if platform.system() == "Windows":
+            sys.exit(
+                "[오류] ffmpeg를 찾을 수 없습니다.\n"
+                "  1) CMD/PowerShell 창을 닫고 새로 여세요 (PATH 갱신)\n"
+                "  2) 또는 설치: winget install ffmpeg"
+            )
+        else:
+            sys.exit("[오류] ffmpeg가 설치되어 있지 않습니다.\n  설치: sudo apt install ffmpeg  또는  brew install ffmpeg")
 
 
 def check_file(path: str, label: str) -> Path:
