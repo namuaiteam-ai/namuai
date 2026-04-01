@@ -108,6 +108,7 @@ def generate():
         "subtitle_size":  int(form.get("subtitle_size", 22)),
         "subtitle_color": form.get("subtitle_color",   "&H00FFFFFF"),
         "subtitle_bold":  int(form.get("subtitle_bold", 1)),
+        "subtitle_anim":  form.get("subtitle_anim", "scroll"),
         "subtitle_margin_v": 60,
     }
 

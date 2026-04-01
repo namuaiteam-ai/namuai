@@ -174,6 +174,150 @@ def group_srt_2lines(cues: list[dict]) -> list[dict]:
     return result
 
 
+def make_fade_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
+    """페이드 인/아웃 자막 ASS 생성"""
+    font      = cfg.get("subtitle_font",    "Arial")
+    size      = int(cfg.get("subtitle_size", 16))
+    color     = cfg.get("subtitle_color",   "&H00FFFFFF")
+    outline_c = cfg.get("subtitle_outline", "&H00000000")
+    bold      = int(cfg.get("subtitle_bold", 0))
+    cx        = w // 2
+    y_pos     = h - 50
+
+    def tc(ms: int) -> str:
+        h_, r = divmod(ms, 3600000)
+        m_, r = divmod(r,  60000)
+        s_, f = divmod(r,  1000)
+        return f"{h_}:{m_:02d}:{s_:02d}.{f//10:02d}"
+
+    header = (
+        "[Script Info]\nScriptType: v4.00+\n"
+        f"PlayResX: {w}\nPlayResY: {h}\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{size},{color},&H000000FF,{outline_c},"
+        f"&H80000000,{bold},0,0,0,100,100,0,0,1,2,0,"
+        f"2,0,0,30,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, "
+        "MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    events = []
+    for cue in cues:
+        s    = cue["start_ms"]
+        e    = cue["end_ms"]
+        dur  = e - s
+        fade = min(300, dur // 4)
+        text = cue["text"].replace("\n", "\\N").strip()
+        events.append(
+            f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,"
+            f"{{\\an2\\pos({cx},{y_pos})\\fad({fade},{fade})}}{text}"
+        )
+    return header + "\n".join(events) + "\n"
+
+
+def make_timing_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
+    """타이밍(카라오케) 스타일 자막 ASS 생성 — 글자가 왼→오 순서로 강조됨"""
+    font      = cfg.get("subtitle_font",    "Arial")
+    size      = int(cfg.get("subtitle_size", 16))
+    color     = cfg.get("subtitle_color",   "&H00FFFFFF")
+    outline_c = cfg.get("subtitle_outline", "&H00000000")
+    bold      = int(cfg.get("subtitle_bold", 0))
+    # 카라오케 강조색: 노란색
+    karaoke_color = "&H0000FFFF"
+    cx        = w // 2
+    y_pos     = h - 50
+
+    def tc(ms: int) -> str:
+        h_, r = divmod(ms, 3600000)
+        m_, r = divmod(r,  60000)
+        s_, f = divmod(r,  1000)
+        return f"{h_}:{m_:02d}:{s_:02d}.{f//10:02d}"
+
+    header = (
+        "[Script Info]\nScriptType: v4.00+\n"
+        f"PlayResX: {w}\nPlayResY: {h}\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{size},{color},&H000000FF,{outline_c},"
+        f"&H80000000,{bold},0,0,0,100,100,0,0,1,2,0,"
+        f"2,0,0,30,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, "
+        "MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    events = []
+    for cue in cues:
+        s    = cue["start_ms"]
+        e    = cue["end_ms"]
+        dur  = e - s
+        text = cue["text"].replace("\n", "\\N").strip()
+        # 각 글자에 균등하게 카라오케 타이밍 배분
+        char_count = max(1, len(text.replace("\\N", "")))
+        ms_per_char = dur // char_count
+        kar_text = ""
+        for ch in text:
+            if ch in ("\\", "N") and text[max(0, text.index(ch)-1):text.index(ch)+2] == "\\N":
+                kar_text += ch
+            else:
+                kar_text += f"{{\\kf{ms_per_char // 10}}}{ch}"
+        events.append(
+            f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,"
+            f"{{\\an2\\pos({cx},{y_pos})\\1c{karaoke_color}}}{kar_text}"
+        )
+    return header + "\n".join(events) + "\n"
+
+
+def make_static_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
+    """하단 고정 자막 ASS 생성 — 움직임 없이 하단에 표시"""
+    font      = cfg.get("subtitle_font",    "Arial")
+    size      = int(cfg.get("subtitle_size", 16))
+    color     = cfg.get("subtitle_color",   "&H00FFFFFF")
+    outline_c = cfg.get("subtitle_outline", "&H00000000")
+    bold      = int(cfg.get("subtitle_bold", 0))
+
+    def tc(ms: int) -> str:
+        h_, r = divmod(ms, 3600000)
+        m_, r = divmod(r,  60000)
+        s_, f = divmod(r,  1000)
+        return f"{h_}:{m_:02d}:{s_:02d}.{f//10:02d}"
+
+    margin_v = int(cfg.get("subtitle_margin_v", 60))
+    header = (
+        "[Script Info]\nScriptType: v4.00+\n"
+        f"PlayResX: {w}\nPlayResY: {h}\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{size},{color},&H000000FF,{outline_c},"
+        f"&H80000000,{bold},0,0,0,100,100,0,0,1,2,0,"
+        f"2,10,10,{margin_v},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, "
+        "MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    events = []
+    for cue in cues:
+        s    = cue["start_ms"]
+        e    = cue["end_ms"]
+        text = cue["text"].replace("\n", "\\N").strip()
+        events.append(
+            f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,{text}"
+        )
+    return header + "\n".join(events) + "\n"
+
+
 def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
     """
     흐르는 자막 ASS 생성 — 3단계 애니메이션
@@ -481,22 +625,34 @@ def build_shorts(images: list[str], audio: str | None,
             step += 1
 
         if sub_path:
-            # SRT/VTT → 흐르는 자막 ASS 직접 생성
+            # SRT/VTT → 선택된 애니메이션 타입에 맞는 ASS 직접 생성
             if sub_path.suffix.lower() in (".srt", ".vtt"):
                 cues = parse_srt(sub_path)
                 if cues:
                     grouped = group_srt_2lines(cues)
-                    scrolling_ass = tmp / "subtitle_scroll.ass"
                     w = cfg["width"]
                     h = cfg["height"]
-                    scrolling_ass.write_text(
-                        make_scrolling_ass(grouped, w, h, cfg),
-                        encoding="utf-8"
-                    )
-                    processed_sub = scrolling_ass
+                    anim = cfg.get("subtitle_anim", "scroll")
+                    ass_file = tmp / "subtitle_custom.ass"
+
+                    if anim == "fade":
+                        ass_content = make_fade_ass(grouped, w, h, cfg)
+                        anim_label = "페이드 인/아웃"
+                    elif anim == "timing":
+                        ass_content = make_timing_ass(grouped, w, h, cfg)
+                        anim_label = "타이밍(카라오케)"
+                    elif anim == "static":
+                        ass_content = make_static_ass(grouped, w, h, cfg)
+                        anim_label = "하단 고정"
+                    else:  # scroll (기본)
+                        ass_content = make_scrolling_ass(grouped, w, h, cfg)
+                        anim_label = "흐르는 자막"
+
+                    ass_file.write_text(ass_content, encoding="utf-8")
+                    processed_sub = ass_file
                     if progress_cb:
                         progress_cb(step, total_steps,
-                            f"흐르는 자막 생성 ({len(cues)}개 큐 → "
+                            f"{anim_label} 자막 생성 ({len(cues)}개 큐 → "
                             f"{len(grouped)}개 2줄 블록)")
                 else:
                     processed_sub = sub_path

@@ -612,6 +612,7 @@ async function startGenerate() {
   form.append('effect',     selectedEffect);
   form.append('subtitle_font', document.getElementById('subFont').value);
   form.append('subtitle_size', document.getElementById('subSize').value);
+  form.append('subtitle_anim', subAnim);
 
   // 색상 → ASS BGR hex 변환 (#rrggbb → &H00bbggrr)
   const hex = document.getElementById('subColor').value.slice(1);
