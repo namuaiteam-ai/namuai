@@ -19,8 +19,8 @@ from pathlib import Path
 
 # ─── 기본 설정 ────────────────────────────────────────────────────────────────
 DEFAULTS = {
-    "width": 720,
-    "height": 1280,
+    "width": 1080,
+    "height": 1920,
     "fps": 30,
     "photo_duration": 4.0,
     "transition": 0.6,
@@ -28,8 +28,8 @@ DEFAULTS = {
     "crf": 23,
     "audio_norm": True,
     "effect": "ken_burns",        # ken_burns | pan | tilt | zoom_in | zoom_out | shake
-    "subtitle_font": "Arial",
-    "subtitle_size": 22,
+    "subtitle_font": "Malgun Gothic",
+    "subtitle_size": 38,
     "subtitle_color": "&H00FFFFFF",
     "subtitle_outline": "&H00000000",
     "subtitle_bg": "&H80000000",
@@ -38,8 +38,8 @@ DEFAULTS = {
 }
 
 SUBTITLE_STYLE = {
-    "fontname": "Arial",
-    "fontsize": 22,
+    "fontname": "Malgun Gothic",
+    "fontsize": 38,
     "primary_color": "&H00FFFFFF",
     "outline_color": "&H00000000",
     "back_color": "&H80000000",
@@ -189,8 +189,8 @@ def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
     bold      = int(cfg.get("subtitle_bold", 0))
 
     SLIDE_MS = 300          # 슬라이드 구간 (ms)
-    cx       = w // 2       # 화면 중앙 x  (\an2 기준)
-    y_pos    = h - 50       # 하단 y
+    cx       = w // 2       # 화면 중앙 x  (\an5 기준)
+    y_pos    = h // 2       # 화면 중앙 y
 
     def tc(ms: int) -> str:
         h_, r = divmod(ms, 3600000)
@@ -230,23 +230,23 @@ def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
             # 큐가 너무 짧으면 fade
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,"
-                f"{{\\an2\\pos({cx},{y_pos})\\fad(150,150)}}{text}"
+                f"{{\\an5\\pos({cx},{y_pos})\\fad(150,150)}}{text}"
             )
         else:
             # ① 슬라이드 인: 오른쪽 밖 → 중앙 (SLIDE_MS 동안 이동 후 중앙에 멈춤)
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(s + SLIDE_MS)},Default,,0,0,0,,"
-                f"{{\\an2\\move({x_right},{y_pos},{cx},{y_pos},0,{SLIDE_MS})}}{text}"
+                f"{{\\an5\\move({x_right},{y_pos},{cx},{y_pos},0,{SLIDE_MS})}}{text}"
             )
             # ② 중앙 유지
             events.append(
                 f"Dialogue: 0,{tc(s + SLIDE_MS)},{tc(e - SLIDE_MS)},Default,,0,0,0,,"
-                f"{{\\an2\\pos({cx},{y_pos})}}{text}"
+                f"{{\\an5\\pos({cx},{y_pos})}}{text}"
             )
             # ③ 슬라이드 아웃: 중앙 → 왼쪽 밖
             events.append(
                 f"Dialogue: 0,{tc(e - SLIDE_MS)},{tc(e)},Default,,0,0,0,,"
-                f"{{\\an2\\move({cx},{y_pos},{x_left},{y_pos},0,{SLIDE_MS})}}{text}"
+                f"{{\\an5\\move({cx},{y_pos},{x_left},{y_pos},0,{SLIDE_MS})}}{text}"
             )
 
     return header + "\n".join(events) + "\n"
