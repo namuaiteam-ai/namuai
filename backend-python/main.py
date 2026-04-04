@@ -110,11 +110,19 @@ async def run_crawler_job():
         process = await asyncio.create_subprocess_exec(
             sys.executable, "crawler.py",
             cwd=str(Path(__file__).parent),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        await process.communicate()
-        print(f"[CRON] Crawler done (exit {process.returncode})")
+        stdout, stderr = await process.communicate()
+        if stdout:
+            print(stdout.decode("utf-8", errors="ignore").strip())
+        if stderr:
+            print("[CRON] STDERR:", stderr.decode("utf-8", errors="ignore").strip())
+        print(f"[CRON] Crawler done (exit code: {process.returncode})")
     except Exception as e:
-        print(f"[CRON] Crawler error: {e}")
+        import traceback
+        print(f"[CRON] Crawler error [{type(e).__name__}]: {e}")
+        traceback.print_exc()
         return
 
     after   = await _get_all_hashes()
