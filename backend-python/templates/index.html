@@ -16,6 +16,8 @@
       --text:    #e2e8f0;
       --muted:   #64748b;
       --green:   #22c55e;
+      --red:     #ef4444;
+      --yellow:  #f59e0b;
     }
 
     body {
@@ -41,27 +43,23 @@
     header h1 span { color: var(--accent); }
 
     .badge {
-      font-size: 0.68rem; font-weight: 700;
+      font-size: .68rem; font-weight: 700;
       padding: 2px 8px; border-radius: 99px;
       background: var(--green); color: #fff;
     }
-    .badge.crawling { background: #f59e0b; animation: blink 1s infinite; }
+    .badge.crawling { background: var(--yellow); animation: blink 1s infinite; }
     .badge.offline  { background: var(--muted); }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     .spacer { flex: 1; }
 
-    #search-wrap {
-      display: flex; gap: 8px; align-items: center;
-    }
     #search-input {
       background: #252840; border: 1px solid var(--border);
       color: var(--text); border-radius: 8px;
-      padding: 6px 12px; font-size: 0.82rem; width: 200px;
+      padding: 6px 12px; font-size: .82rem; width: 200px;
     }
     #search-input:focus { outline: none; border-color: var(--accent); }
-
-    #status-txt { font-size: 0.75rem; color: var(--muted); }
+    #status-txt { font-size: .75rem; color: var(--muted); }
 
     /* ── Layout ── */
     .layout { display: flex; flex: 1; overflow: hidden; }
@@ -76,14 +74,14 @@
       overflow-y: auto;
     }
     aside h2 {
-      font-size: 0.68rem; font-weight: 700;
+      font-size: .68rem; font-weight: 700;
       color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
     }
 
     .filter-group { display: flex; flex-direction: column; gap: 3px; }
     .filter-btn {
       background: none; border: none;
-      color: #94a3b8; font-size: 0.84rem;
+      color: #94a3b8; font-size: .84rem;
       padding: 6px 10px; border-radius: 7px;
       cursor: pointer; text-align: left;
       display: flex; justify-content: space-between; align-items: center;
@@ -91,35 +89,36 @@
     }
     .filter-btn:hover  { background: #252840; color: var(--text); }
     .filter-btn.active { background: #3730a3; color: #fff; }
-    .filter-btn .cnt   { font-size: 0.67rem; background: #2d3148; padding: 1px 6px; border-radius: 99px; }
+    .filter-btn .cnt   { font-size: .67rem; background: #2d3148; padding: 1px 6px; border-radius: 99px; }
     .filter-btn.active .cnt { background: var(--accent); }
 
     .stat-box {
       background: #252840; border-radius: 10px;
-      padding: 11px 13px; font-size: 0.78rem; line-height: 1.9; color: #94a3b8;
+      padding: 11px 13px; font-size: .78rem; line-height: 1.9; color: #94a3b8;
     }
     .stat-box strong { color: var(--text); }
 
     .btn {
       background: var(--accent); color: #fff; border: none;
       border-radius: 8px; padding: 8px 12px;
-      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      font-size: .82rem; font-weight: 600; cursor: pointer;
       transition: background .15s; width: 100%;
     }
-    .btn:hover { background: var(--accent2); }
+    .btn:hover    { background: var(--accent2); }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-    /* ── Feed ── */
-    main {
-      flex: 1; overflow-y: auto;
-      padding: 18px 22px;
+    .btn-shorts {
+      background: linear-gradient(135deg, #ff0050, #ff6b35);
+      color: #fff; border: none;
+      border-radius: 8px; padding: 9px 12px;
+      font-size: .84rem; font-weight: 700; cursor: pointer;
+      width: 100%; transition: opacity .15s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
     }
+    .btn-shorts:hover { opacity: .88; }
 
-    .section-title {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .08em;
-      margin-bottom: 12px;
-    }
+    /* ── Feed ── */
+    main { flex: 1; overflow-y: auto; padding: 18px 22px; }
 
     .card {
       background: var(--surface); border: 1px solid var(--border);
@@ -140,32 +139,22 @@
       margin-bottom: 5px; flex-wrap: wrap;
     }
     .tag {
-      font-size: 0.67rem; font-weight: 700;
+      font-size: .67rem; font-weight: 700;
       padding: 2px 7px; border-radius: 99px;
       background: #3730a3; color: #a5b4fc;
     }
     .src-tag {
-      font-size: 0.67rem; font-weight: 600;
+      font-size: .67rem; font-weight: 600;
       padding: 2px 7px; border-radius: 99px;
       background: #1e293b; color: #94a3b8;
     }
-    .card-time { font-size: 0.68rem; color: #475569; margin-left: auto; }
-
-    .card-title {
-      font-size: 0.93rem; font-weight: 600; line-height: 1.45;
-    }
+    .card-time  { font-size: .68rem; color: #475569; margin-left: auto; }
+    .card-title { font-size: .93rem; font-weight: 600; line-height: 1.45; }
     .card-title a { color: var(--text); text-decoration: none; }
     .card-title a:hover { color: #a5b4fc; }
+    .card-stats { margin-top: 5px; font-size: .73rem; color: var(--muted); display: flex; gap: 10px; }
 
-    .card-stats {
-      margin-top: 5px; font-size: 0.73rem; color: var(--muted);
-      display: flex; gap: 10px;
-    }
-
-    .empty {
-      text-align: center; color: #475569;
-      margin-top: 60px; font-size: 0.88rem; line-height: 2.2;
-    }
+    .empty { text-align: center; color: #475569; margin-top: 60px; font-size: .88rem; line-height: 2.2; }
     .spinner {
       display: inline-block; width: 18px; height: 18px;
       border: 2px solid #3d4166; border-top-color: var(--accent);
@@ -183,6 +172,140 @@
       box-shadow: 0 4px 12px rgba(99,102,241,.4);
     }
     #scroll-top.show { display: flex; }
+
+    /* ── Shorts 추천 모달 ── */
+    #shorts-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      align-items: flex-start; justify-content: center;
+      padding: 40px 16px;
+      overflow-y: auto;
+    }
+    #shorts-overlay.open { display: flex; }
+
+    #shorts-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%; max-width: 780px;
+      padding: 0;
+      animation: panelIn .25s ease;
+    }
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(-16px) scale(.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .shorts-header {
+      background: linear-gradient(135deg, #ff0050 0%, #ff6b35 100%);
+      border-radius: 16px 16px 0 0;
+      padding: 18px 22px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .shorts-header h2 { font-size: 1.05rem; font-weight: 800; color: #fff; }
+    .shorts-header .meta { font-size: .78rem; color: rgba(255,255,255,.75); }
+    .shorts-header .spacer { flex: 1; }
+
+    .shorts-controls {
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .shorts-controls label { font-size: .78rem; color: var(--muted); }
+    .hours-select {
+      background: #252840; border: 1px solid var(--border);
+      color: var(--text); border-radius: 7px;
+      padding: 5px 10px; font-size: .82rem; cursor: pointer;
+    }
+    .refresh-btn {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 7px; padding: 5px 14px;
+      font-size: .82rem; font-weight: 600; cursor: pointer;
+    }
+    .refresh-btn:hover { background: var(--accent2); }
+    .candidate-info { font-size: .75rem; color: var(--muted); margin-left: auto; }
+
+    #shorts-list { padding: 14px 22px 22px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── Shorts 기사 카드 ── */
+    .sc {
+      background: #12151f;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; gap: 14px; align-items: flex-start;
+      transition: border-color .2s;
+    }
+    .sc:hover { border-color: #ff0050; }
+
+    .sc-rank {
+      min-width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .9rem; font-weight: 800;
+      flex-shrink: 0;
+    }
+    .sc-rank.r1 { background: linear-gradient(135deg,#ffd700,#ffb300); color: #000; }
+    .sc-rank.r2 { background: linear-gradient(135deg,#c0c0c0,#a8a8a8); color: #000; }
+    .sc-rank.r3 { background: linear-gradient(135deg,#cd7f32,#b87333); color: #fff; }
+    .sc-rank.rn { background: #252840; color: var(--muted); font-size: .82rem; }
+
+    .sc-body { flex: 1; min-width: 0; }
+
+    .sc-meta {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 5px; flex-wrap: wrap;
+    }
+    .sc-cat {
+      font-size: .65rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 99px;
+      background: rgba(255,0,80,.15); color: #ff6b6b;
+    }
+    .sc-src { font-size: .65rem; color: var(--muted); }
+    .sc-time { font-size: .65rem; color: #475569; margin-left: auto; }
+
+    .sc-title {
+      font-size: .92rem; font-weight: 600; line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .sc-title a { color: var(--text); text-decoration: none; }
+    .sc-title a:hover { color: #ff6b6b; }
+
+    .sc-score-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .sc-score-label { font-size: .68rem; color: var(--muted); white-space: nowrap; }
+    .sc-bar-wrap { flex: 1; background: #1e2235; border-radius: 99px; height: 5px; overflow: hidden; }
+    .sc-bar { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#ff0050,#ff6b35); }
+    .sc-score-val { font-size: .72rem; font-weight: 700; color: #ff6b6b; white-space: nowrap; }
+
+    .sc-reasons {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;
+    }
+    .sc-reason {
+      font-size: .65rem;
+      background: #1e2235; color: #94a3b8;
+      padding: 2px 8px; border-radius: 99px;
+    }
+
+    .sc-actions { display: flex; gap: 6px; }
+    .sc-btn {
+      font-size: .72rem; font-weight: 600;
+      padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer;
+      transition: opacity .15s;
+    }
+    .sc-btn:hover { opacity: .8; }
+    .sc-btn.copy  { background: #252840; color: var(--text); }
+    .sc-btn.open  { background: rgba(255,0,80,.2); color: #ff6b6b; }
+
+    .close-btn {
+      background: rgba(255,255,255,.15); border: none; color: #fff;
+      border-radius: 8px; padding: 5px 14px;
+      font-size: .82rem; font-weight: 600; cursor: pointer;
+    }
+    .close-btn:hover { background: rgba(255,255,255,.25); }
   </style>
 </head>
 <body>
@@ -190,9 +313,7 @@
 <header>
   <h1>New<span>Finder</span></h1>
   <span class="badge" id="live-badge">LIVE</span>
-  <div id="search-wrap">
-    <input id="search-input" placeholder="기사 검색..." oninput="onSearch(this.value)" />
-  </div>
+  <input id="search-input" placeholder="기사 검색..." oninput="onSearch(this.value)" />
   <span class="spacer"></span>
   <span id="status-txt">연결 중...</span>
 </header>
@@ -207,13 +328,13 @@
         <button class="filter-btn active" data-key="cat" data-val="" onclick="setFilter(this,'cat','')">
           전체 <span class="cnt" id="cnt-cat-all">0</span>
         </button>
-        <button class="filter-btn" data-key="cat" data-val="정치" onclick="setFilter(this,'cat','정치')">정치 <span class="cnt" id="cnt-cat-정치">0</span></button>
-        <button class="filter-btn" data-key="cat" data-val="경제" onclick="setFilter(this,'cat','경제')">경제 <span class="cnt" id="cnt-cat-경제">0</span></button>
-        <button class="filter-btn" data-key="cat" data-val="사회" onclick="setFilter(this,'cat','사회')">사회 <span class="cnt" id="cnt-cat-사회">0</span></button>
-        <button class="filter-btn" data-key="cat" data-val="세계" onclick="setFilter(this,'cat','세계')">세계 <span class="cnt" id="cnt-cat-세계">0</span></button>
-        <button class="filter-btn" data-key="cat" data-val="연예" onclick="setFilter(this,'cat','연예')">연예 <span class="cnt" id="cnt-cat-연예">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="정치"   onclick="setFilter(this,'cat','정치')">정치 <span class="cnt" id="cnt-cat-정치">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="경제"   onclick="setFilter(this,'cat','경제')">경제 <span class="cnt" id="cnt-cat-경제">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="사회"   onclick="setFilter(this,'cat','사회')">사회 <span class="cnt" id="cnt-cat-사회">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="세계"   onclick="setFilter(this,'cat','세계')">세계 <span class="cnt" id="cnt-cat-세계">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="연예"   onclick="setFilter(this,'cat','연예')">연예 <span class="cnt" id="cnt-cat-연예">0</span></button>
         <button class="filter-btn" data-key="cat" data-val="스포츠" onclick="setFilter(this,'cat','스포츠')">스포츠 <span class="cnt" id="cnt-cat-스포츠">0</span></button>
-        <button class="filter-btn" data-key="cat" data-val="일반" onclick="setFilter(this,'cat','일반')">일반 <span class="cnt" id="cnt-cat-일반">0</span></button>
+        <button class="filter-btn" data-key="cat" data-val="일반"   onclick="setFilter(this,'cat','일반')">일반 <span class="cnt" id="cnt-cat-일반">0</span></button>
       </div>
     </div>
 
@@ -234,12 +355,17 @@
       <h2>현황</h2>
       <div class="stat-box">
         총 기사 <strong id="stat-total">-</strong>건<br>
-        조회수 합계 <strong id="stat-views">-</strong><br>
-        댓글 합계 <strong id="stat-comments">-</strong>
+        조회수 <strong id="stat-views">-</strong><br>
+        댓글 <strong id="stat-comments">-</strong>
       </div>
     </div>
 
     <button class="btn" id="crawl-btn" onclick="triggerCrawl()">지금 크롤링</button>
+
+    <!-- Shorts 추천 버튼 -->
+    <button class="btn-shorts" onclick="openShorts()">
+      🎬 Shorts 추천 TOP 10
+    </button>
   </aside>
 
   <!-- Feed -->
@@ -250,39 +376,65 @@
   </main>
 </div>
 
+<!-- ── Shorts 추천 모달 ── -->
+<div id="shorts-overlay" onclick="overlayClick(event)">
+  <div id="shorts-panel">
+    <div class="shorts-header">
+      <div>
+        <h2>🎬 YouTube Shorts 추천 TOP 10</h2>
+        <div class="meta" id="shorts-meta">참여도 · 최신성 · 제목 길이 · 카테고리 적합도 종합 분석</div>
+      </div>
+      <span class="spacer"></span>
+      <button class="close-btn" onclick="closeShorts()">✕ 닫기</button>
+    </div>
+
+    <div class="shorts-controls">
+      <label>분석 범위</label>
+      <select class="hours-select" id="hours-select">
+        <option value="6">최근 6시간</option>
+        <option value="12">최근 12시간</option>
+        <option value="24" selected>최근 24시간</option>
+        <option value="48">최근 48시간</option>
+        <option value="168">최근 7일</option>
+      </select>
+      <button class="refresh-btn" onclick="loadRecommend()">새로고침</button>
+      <span class="candidate-info" id="candidate-info"></span>
+    </div>
+
+    <div id="shorts-list">
+      <div class="empty"><span class="spinner"></span>분석 중...</div>
+    </div>
+  </div>
+</div>
+
 <button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <script>
 // ── 상태 ──────────────────────────────────────────────────────────────────────
-const API = "";   // 같은 출처, 프록시 없이 직접 호출
+const API = "";
 let filter = { cat: "", src: "" };
-let searchQ = "";
-let searchTimer = null;
-let totalShown = 0;
+let searchQ = "", searchTimer = null;
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
-const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
 function fmtTime(ms) {
   if (!ms) return "";
   const diff = Math.floor((Date.now() - ms) / 1000);
-  if (diff < 60)   return `${diff}초 전`;
-  if (diff < 3600) return `${Math.floor(diff/60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}시간 전`;
+  if (diff < 60)    return diff + "초 전";
+  if (diff < 3600)  return Math.floor(diff / 60) + "분 전";
+  if (diff < 86400) return Math.floor(diff / 3600) + "시간 전";
   const d = new Date(ms);
-  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return (d.getMonth()+1) + "/" + d.getDate() + " " +
+    String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
 }
 
-function srcLabel(s) {
-  return {kbs:"KBS",mbc:"MBC",sbs:"SBS",ytn:"YTN",yonhap:"연합뉴스",daum:"다음"}[s] || s.toUpperCase();
-}
+const srcLabel = s => ({kbs:"KBS",mbc:"MBC",sbs:"SBS",ytn:"YTN",yonhap:"연합뉴스",daum:"다음"}[s] || (s||"").toUpperCase());
 
-// ── 카드 ──────────────────────────────────────────────────────────────────────
+// ── 일반 기사 카드 ────────────────────────────────────────────────────────────
 function makeCard(a, isNew = false) {
   const div = document.createElement("div");
   div.className = "card" + (isNew ? " new" : "");
-  div.dataset.cat = a.category || "";
-  div.dataset.src = a.source   || "";
   div.innerHTML = `
     <div class="card-meta">
       <span class="tag">${esc(a.category||"일반")}</span>
@@ -296,11 +448,11 @@ function makeCard(a, isNew = false) {
       <span>👁 ${(a.views||0).toLocaleString()}</span>
       <span>💬 ${(a.comments||0).toLocaleString()}</span>
     </div>`;
-  setTimeout(() => div.classList.remove("new"), 2500);
+  if (isNew) setTimeout(() => div.classList.remove("new"), 2500);
   return div;
 }
 
-// ── 피드 로드 (REST) ──────────────────────────────────────────────────────────
+// ── 피드 ──────────────────────────────────────────────────────────────────────
 async function loadFeed() {
   const params = new URLSearchParams({ limit: 60, offset: 0 });
   if (filter.cat) params.set("category", filter.cat);
@@ -309,25 +461,18 @@ async function loadFeed() {
 
   const feed = document.getElementById("feed");
   feed.innerHTML = `<div class="empty"><span class="spinner"></span>불러오는 중...</div>`;
-
   try {
-    const res  = await fetch(`${API}/api/articles?${params}`);
+    const res  = await fetch("/api/articles?" + params);
     const json = await res.json();
     const data = json.data || [];
-
     feed.innerHTML = "";
-    if (!data.length) {
-      feed.innerHTML = `<div class="empty">검색 결과가 없습니다.</div>`;
-      return;
-    }
+    if (!data.length) { feed.innerHTML = `<div class="empty">검색 결과가 없습니다.</div>`; return; }
     data.forEach(a => feed.appendChild(makeCard(a)));
-    totalShown = data.length;
   } catch (e) {
-    feed.innerHTML = `<div class="empty">데이터 로드 실패: ${e.message}</div>`;
+    feed.innerHTML = `<div class="empty">로드 실패: ${e.message}</div>`;
   }
 }
 
-// ── 필터 / 검색 ───────────────────────────────────────────────────────────────
 function setFilter(btn, key, val) {
   filter[key] = val;
   document.querySelectorAll(`.filter-btn[data-key="${key}"]`).forEach(b => b.classList.remove("active"));
@@ -340,88 +485,168 @@ function onSearch(val) {
   searchTimer = setTimeout(() => { searchQ = val.trim(); loadFeed(); }, 400);
 }
 
-// ── 카운트 업데이트 ───────────────────────────────────────────────────────────
+// ── 카운트 ────────────────────────────────────────────────────────────────────
 const _catCnt = {};
 function incCat(cat) {
   _catCnt[cat] = (_catCnt[cat]||0) + 1;
-  const el = document.getElementById(`cnt-cat-${cat}`);
+  const el = document.getElementById("cnt-cat-" + cat);
   if (el) el.textContent = _catCnt[cat];
-  const total = Object.values(_catCnt).reduce((s,v)=>s+v,0);
+  const total = Object.values(_catCnt).reduce((s,v) => s+v, 0);
   const elAll = document.getElementById("cnt-cat-all");
   if (elAll) elAll.textContent = total;
 }
 
 // ── SSE ───────────────────────────────────────────────────────────────────────
 function connectSSE() {
-  const es = new EventSource(`${API}/stream`);
-
+  const es = new EventSource("/stream");
   es.onopen = () => {
     document.getElementById("status-txt").textContent = "실시간 연결됨";
     document.getElementById("live-badge").className = "badge";
+    document.getElementById("live-badge").textContent = "LIVE";
   };
-
   es.onmessage = (e) => {
     if (!e.data || e.data.startsWith(":")) return;
-    let a;
-    try { a = JSON.parse(e.data); } catch { return; }
-
+    let a; try { a = JSON.parse(e.data); } catch { return; }
     incCat(a.category || "일반");
-
-    // 현재 필터와 일치하면 피드 상단에 추가
     const catOk = !filter.cat || a.category === filter.cat;
     const srcOk = !filter.src || a.source   === filter.src;
     const qOk   = !searchQ   || (a.title||"").includes(searchQ);
     if (catOk && srcOk && qOk) {
-      const feed = document.getElementById("feed");
+      const feed  = document.getElementById("feed");
       const empty = document.getElementById("empty-msg");
       if (empty) empty.remove();
       feed.insertBefore(makeCard(a, true), feed.firstChild);
     }
   };
-
   es.onerror = () => {
     document.getElementById("status-txt").textContent = "재연결 중...";
     document.getElementById("live-badge").className = "badge offline";
-    es.close();
-    setTimeout(connectSSE, 4000);
+    es.close(); setTimeout(connectSSE, 4000);
   };
 }
 
 // ── 크롤링 트리거 ─────────────────────────────────────────────────────────────
 async function triggerCrawl() {
   const btn = document.getElementById("crawl-btn");
-  btn.disabled = true;
-  btn.textContent = "크롤링 중...";
+  btn.disabled = true; btn.textContent = "크롤링 중...";
   document.getElementById("live-badge").className = "badge crawling";
   document.getElementById("live-badge").textContent = "크롤링";
-
-  try {
-    await fetch(`${API}/api/crawl`, { method: "POST" });
-    document.getElementById("status-txt").textContent = "크롤링 시작됨 — 잠시 후 기사가 업데이트됩니다";
-  } catch(e) {
-    document.getElementById("status-txt").textContent = "오류: " + e.message;
-  }
-
+  await fetch("/api/crawl", { method: "POST" }).catch(() => {});
+  document.getElementById("status-txt").textContent = "크롤링 시작됨";
   setTimeout(() => {
-    btn.disabled = false;
-    btn.textContent = "지금 크롤링";
+    btn.disabled = false; btn.textContent = "지금 크롤링";
     document.getElementById("live-badge").className = "badge";
     document.getElementById("live-badge").textContent = "LIVE";
-    loadStats();
-    loadFeed();
+    loadStats(); loadFeed();
   }, 8000);
 }
 
 // ── 통계 ──────────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
-    const res  = await fetch(`${API}/api/stats`);
+    const res  = await fetch("/api/stats");
     const json = await res.json();
     const d    = json.data || {};
     document.getElementById("stat-total").textContent    = (d.total_articles||0).toLocaleString();
     document.getElementById("stat-views").textContent    = (d.total_views||0).toLocaleString();
     document.getElementById("stat-comments").textContent = (d.total_comments||0).toLocaleString();
   } catch {}
+}
+
+// ── Shorts 추천 모달 ──────────────────────────────────────────────────────────
+function openShorts() {
+  document.getElementById("shorts-overlay").classList.add("open");
+  loadRecommend();
+}
+
+function closeShorts() {
+  document.getElementById("shorts-overlay").classList.remove("open");
+}
+
+function overlayClick(e) {
+  if (e.target === document.getElementById("shorts-overlay")) closeShorts();
+}
+
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeShorts(); });
+
+// ── Shorts 카드 렌더 ──────────────────────────────────────────────────────────
+function makeShortsCard(a, maxScore) {
+  const rank   = a.rank;
+  const rClass = rank === 1 ? "r1" : rank === 2 ? "r2" : rank === 3 ? "r3" : "rn";
+  const barPct = maxScore > 0 ? Math.round((a.shorts_score / maxScore) * 100) : 0;
+  const reasons = (a.reasons || []).filter(Boolean);
+
+  const div = document.createElement("div");
+  div.className = "sc";
+  div.innerHTML = `
+    <div class="sc-rank ${rClass}">${rank}</div>
+    <div class="sc-body">
+      <div class="sc-meta">
+        <span class="sc-cat">${esc(a.category||"일반")}</span>
+        <span class="sc-src">${esc(srcLabel(a.source||""))}</span>
+        <span class="sc-time">${fmtTime(a.published_at)}</span>
+      </div>
+      <div class="sc-title">
+        <a href="${esc(a.url||"#")}" target="_blank" rel="noopener">${esc(a.title||"")}</a>
+      </div>
+      <div class="sc-score-row">
+        <span class="sc-score-label">Shorts 적합도</span>
+        <div class="sc-bar-wrap"><div class="sc-bar" style="width:${barPct}%"></div></div>
+        <span class="sc-score-val">${a.shorts_score}점</span>
+      </div>
+      <div class="sc-reasons">
+        ${reasons.map(r => `<span class="sc-reason">${esc(r)}</span>`).join("")}
+      </div>
+      <div class="sc-actions">
+        <button class="sc-btn copy" onclick="copyTitle(this, ${JSON.stringify(esc(a.title||""))})">📋 제목 복사</button>
+        <button class="sc-btn open" onclick="window.open('${esc(a.url||"#")}','_blank')">🔗 기사 열기</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+function copyTitle(btn, title) {
+  // HTML 엔티티 디코딩
+  const txt = new DOMParser().parseFromString(title, "text/html").body.textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = "✅ 복사됨";
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {
+    prompt("제목을 복사하세요:", txt);
+  });
+}
+
+// ── 추천 API 호출 ─────────────────────────────────────────────────────────────
+async function loadRecommend() {
+  const list  = document.getElementById("shorts-list");
+  const hours = document.getElementById("hours-select").value;
+  list.innerHTML = `<div class="empty"><span class="spinner"></span>분석 중...</div>`;
+  document.getElementById("candidate-info").textContent = "";
+
+  try {
+    const res  = await fetch(`/api/recommend?hours=${hours}`);
+    const json = await res.json();
+    const data = json.data || [];
+
+    document.getElementById("candidate-info").textContent =
+      `후보 기사 ${json.total_candidates || 0}건 중 TOP ${data.length}`;
+    document.getElementById("shorts-meta").textContent =
+      `참여도 · 최신성 · 제목 최적화 · 카테고리 적합도 종합 분석 — 최근 ${hours}시간`;
+
+    list.innerHTML = "";
+
+    if (!data.length) {
+      list.innerHTML = `<div class="empty">해당 기간 내 분석할 기사가 없습니다.<br>크롤링을 먼저 실행해 주세요.</div>`;
+      return;
+    }
+
+    const maxScore = data[0]?.shorts_score || 1;
+    data.forEach(a => list.appendChild(makeShortsCard(a, maxScore)));
+
+  } catch (e) {
+    list.innerHTML = `<div class="empty">추천 로드 실패: ${e.message}</div>`;
+  }
 }
 
 // ── scroll-top ────────────────────────────────────────────────────────────────

@@ -265,6 +265,136 @@ async def trigger_crawl():
     return {"ok": True, "message": "크롤링 시작됨"}
 
 
+# ─── Shorts 추천 ──────────────────────────────────────────────────────────────
+
+# 카테고리별 유튜브 쇼츠 적합도 가중치
+_CAT_WEIGHT = {
+    "연예":   1.40,
+    "스포츠": 1.30,
+    "사회":   1.15,
+    "세계":   1.10,
+    "정치":   1.05,
+    "경제":   1.00,
+    "일반":   0.85,
+}
+
+# 카테고리별 추천 이유 템플릿
+_CAT_REASON = {
+    "연예":   "연예·셀럽 이슈는 Shorts 조회수가 높습니다",
+    "스포츠": "스포츠 하이라이트는 짧은 영상에 최적입니다",
+    "사회":   "사회 이슈는 공유·댓글 반응이 빠릅니다",
+    "세계":   "국제 뉴스는 글로벌 시청자를 끌어올 수 있습니다",
+    "정치":   "정치 이슈는 댓글·논쟁 유발로 체류시간을 높입니다",
+    "경제":   "경제 정보 콘텐츠는 구독 전환율이 높습니다",
+    "일반":   "트렌딩 이슈로 빠른 바이럴 가능성이 있습니다",
+}
+
+
+def _shorts_score(r: dict) -> tuple[float, list[str]]:
+    """유튜브 Shorts 적합 점수와 이유 반환."""
+    views    = r.get("views", 0) or 0
+    comments = r.get("comments", 0) or 0
+    pub_at   = r.get("published_at", 0) or 0
+    title    = r.get("title", "")
+    category = r.get("category", "일반")
+
+    # 1) 참여도 (댓글 가중치 높임 — 논쟁·반응 지표)
+    engagement = views * 0.25 + comments * 2.0
+
+    # 2) 최신성 (48시간 기준 선형 감소)
+    hours_ago = (time.time() * 1000 - pub_at) / 3_600_000
+    recency   = max(0.0, 1.0 - hours_ago / 48.0)
+
+    # 3) 제목 길이 (15~30자 최적)
+    tlen = len(title)
+    if tlen <= 15:
+        title_sc = 0.7
+    elif tlen <= 30:
+        title_sc = 1.0
+    elif tlen <= 45:
+        title_sc = 0.8
+    else:
+        title_sc = max(0.4, 1.0 - (tlen - 45) / 60)
+
+    # 4) 카테고리 가중치
+    cat_w = _CAT_WEIGHT.get(category, 0.9)
+
+    score = (engagement * 0.45 + recency * 120 * 0.40 + title_sc * 80 * 0.15) * cat_w
+
+    # 이유 목록
+    reasons = []
+    if hours_ago < 3:
+        reasons.append("🔥 3시간 이내 속보")
+    elif hours_ago < 12:
+        reasons.append("⚡ 12시간 이내 최신 기사")
+    if comments > 500:
+        reasons.append(f"💬 댓글 {comments:,}개 — 높은 반응")
+    elif comments > 100:
+        reasons.append(f"💬 댓글 {comments:,}개")
+    if views > 50000:
+        reasons.append(f"👁 조회 {views:,}회 — 트렌딩")
+    elif views > 10000:
+        reasons.append(f"👁 조회 {views:,}회")
+    if 15 <= tlen <= 30:
+        reasons.append("✏️ 제목 길이 Shorts 최적")
+    reasons.append(_CAT_REASON.get(category, ""))
+
+    return round(score, 1), reasons
+
+
+@app.get("/api/recommend")
+async def get_recommend(hours: int = Query(48, ge=1, le=168)):
+    """유튜브 Shorts 추천 기사 10개 반환.
+
+    - 최근 `hours`시간 이내 기사 대상
+    - 카테고리당 최대 3개로 다양성 확보
+    - Shorts 적합 점수 상위 10개
+    """
+    since_ms = int((time.time() - hours * 3600) * 1000)
+
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute(
+            "SELECT id,title,category,source,url,published_at,views,comments "
+            "FROM articles WHERE published_at >= ? ORDER BY published_at DESC",
+            (since_ms,),
+        )
+        rows = [dict(r) for r in await cur.fetchall()]
+
+    # 점수 계산
+    scored = []
+    for r in rows:
+        sc, reasons = _shorts_score(r)
+        scored.append({**r, "shorts_score": sc, "reasons": reasons})
+
+    scored.sort(key=lambda x: x["shorts_score"], reverse=True)
+
+    # 카테고리당 최대 3개로 다양성 확보
+    cat_count: dict[str, int] = {}
+    result = []
+    for item in scored:
+        cat = item["category"]
+        if cat_count.get(cat, 0) >= 3:
+            continue
+        cat_count[cat] = cat_count.get(cat, 0) + 1
+        result.append(item)
+        if len(result) == 10:
+            break
+
+    # 부족하면 나머지로 채움
+    if len(result) < 10:
+        for item in scored:
+            if item not in result:
+                result.append(item)
+            if len(result) == 10:
+                break
+
+    for i, item in enumerate(result):
+        item["rank"] = i + 1
+
+    return {"ok": True, "data": result, "total_candidates": len(rows)}
+
+
 @app.get("/api/stats")
 async def get_stats():
     async with aiosqlite.connect(DB_PATH) as conn:
