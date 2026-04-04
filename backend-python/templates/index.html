@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 뉴스 크롤러</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1d2e;
+      border-bottom: 1px solid #2d3148;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 1.15rem; font-weight: 700; color: #fff; }
+    header h1 span { color: #6366f1; }
+
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: #6366f1;
+      color: #fff;
+    }
+    .badge.live { background: #22c55e; animation: pulse 1.8s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+
+    .spacer { flex: 1; }
+
+    #status-text {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      width: 220px;
+      min-width: 220px;
+      background: #1a1d2e;
+      border-right: 1px solid #2d3148;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    aside h2 {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .cat-list { display: flex; flex-direction: column; gap: 4px; }
+    .cat-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.875rem;
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: background .15s, color .15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cat-btn:hover  { background: #252840; color: #e2e8f0; }
+    .cat-btn.active { background: #3730a3; color: #fff; }
+    .cat-btn .cnt {
+      font-size: 0.7rem;
+      background: #2d3148;
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+    .cat-btn.active .cnt { background: #4f46e5; }
+
+    .stat-box {
+      background: #252840;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.8rem;
+      line-height: 1.8;
+      color: #94a3b8;
+    }
+    .stat-box strong { color: #e2e8f0; }
+
+    .btn-group { display: flex; flex-direction: column; gap: 8px; }
+    .btn {
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn:hover   { background: #4f46e5; }
+    .btn.outline { background: transparent; border: 1px solid #3d4166; color: #94a3b8; }
+    .btn.outline:hover { border-color: #6366f1; color: #fff; }
+
+    .interval-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .interval-row label { font-size: 0.78rem; color: #64748b; white-space: nowrap; }
+    .interval-row input {
+      width: 70px;
+      background: #252840;
+      border: 1px solid #3d4166;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 0.82rem;
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ── Article card ── */
+    .article-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      transition: border-color .2s;
+      animation: slideIn .3s ease;
+    }
+    .article-card:hover { border-color: #4f46e5; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .article-card.new { border-color: #6366f1; }
+
+    .card-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: #3730a3;
+      color: #a5b4fc;
+    }
+    .card-source { font-size: 0.72rem; color: #64748b; }
+    .card-time   { font-size: 0.72rem; color: #475569; margin-left: auto; }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      line-height: 1.45;
+      margin-bottom: 5px;
+    }
+    .card-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .card-title a:hover { color: #a5b4fc; }
+
+    .card-summary {
+      font-size: 0.8rem;
+      color: #64748b;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      color: #475569;
+      margin-top: 60px;
+      font-size: 0.9rem;
+      line-height: 2;
+    }
+
+    /* ── Scroll top btn ── */
+    #scroll-top {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(99,102,241,.4);
+    }
+    #scroll-top.show { display: flex; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>뉴스 <span>크롤러</span></h1>
+  <span class="badge live" id="live-badge">LIVE</span>
+  <span class="spacer"></span>
+  <span id="status-text">연결 중...</span>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div>
+      <h2>카테고리</h2>
+      <div class="cat-list" id="cat-list">
+        <button class="cat-btn active" data-cat="" onclick="filterCat(this, '')">
+          전체 <span class="cnt" id="cnt-all">0</span>
+        </button>
+        {% for cat in categories %}
+        <button class="cat-btn {% if cat in active %}active{% endif %}"
+                data-cat="{{ cat }}" onclick="filterCat(this, '{{ cat }}')">
+          {{ cat }} <span class="cnt" id="cnt-{{ cat }}">0</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <h2>현황</h2>
+      <div class="stat-box">
+        총 기사 <strong id="stat-total">0</strong>개<br>
+        마지막 수집 <strong id="stat-last">-</strong><br>
+        간격 <strong id="stat-interval">{{ interval }}초</strong>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn" onclick="crawlNow()">지금 크롤링</button>
+      <div class="interval-row">
+        <label>간격(초)</label>
+        <input type="number" id="interval-input" value="{{ interval }}" min="10" max="3600" />
+        <button class="btn outline" onclick="applyInterval()">적용</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Feed -->
+  <main id="feed">
+    <div class="empty" id="empty-msg">
+      크롤러가 기사를 가져오는 중입니다...<br>잠시만 기다려 주세요.
+    </div>
+  </main>
+</div>
+
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ── 상태 ──────────────────────────────────────────────────────────────────
+let currentCat = "";
+const allArticles = [];          // 전체 캐시 (최신 순)
+const catCounts   = {};          // {카테고리: 수}
+
+// ── 유틸 ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+          .replace(/"/g,"&quot;");
+}
+
+function timeAgo(dtStr) {
+  const diff = Math.floor((Date.now() - new Date(dtStr)) / 1000);
+  if (diff < 60)   return `${diff}초 전`;
+  if (diff < 3600) return `${Math.floor(diff/60)}분 전`;
+  return dtStr.slice(11, 16);  // HH:MM
+}
+
+// ── 카드 렌더 ─────────────────────────────────────────────────────────────
+function makeCard(a, isNew = false) {
+  const card = document.createElement("div");
+  card.className = "article-card" + (isNew ? " new" : "");
+  card.dataset.cat = a.category;
+  card.innerHTML = `
+    <div class="card-meta">
+      <span class="tag">${escHtml(a.category)}</span>
+      <span class="card-source">${escHtml(a.source)}</span>
+      <span class="card-time">${timeAgo(a.published)}</span>
+    </div>
+    <div class="card-title">
+      <a href="${escHtml(a.link)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
+    </div>
+    ${a.summary ? `<div class="card-summary">${escHtml(a.summary)}</div>` : ""}
+  `;
+  return card;
+}
+
+function prependCard(a) {
+  const feed  = document.getElementById("feed");
+  const empty = document.getElementById("empty-msg");
+  if (empty) empty.remove();
+
+  const card = makeCard(a, true);
+  feed.insertBefore(card, feed.firstChild);
+  setTimeout(() => card.classList.remove("new"), 2000);
+}
+
+// ── 카운트 ────────────────────────────────────────────────────────────────
+function incCount(cat) {
+  catCounts[cat] = (catCounts[cat] || 0) + 1;
+  const el = document.getElementById(`cnt-${cat}`);
+  if (el) el.textContent = catCounts[cat];
+
+  const total = Object.values(catCounts).reduce((s, v) => s + v, 0);
+  document.getElementById("cnt-all").textContent = total;
+  document.getElementById("stat-total").textContent = total;
+}
+
+// ── 필터 ──────────────────────────────────────────────────────────────────
+function filterCat(btn, cat) {
+  currentCat = cat;
+  document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  const feed = document.getElementById("feed");
+  feed.innerHTML = "";
+
+  const filtered = cat ? allArticles.filter(a => a.category === cat) : allArticles;
+  if (!filtered.length) {
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.id = "empty-msg";
+    d.textContent = "해당 카테고리의 기사가 없습니다.";
+    feed.appendChild(d);
+    return;
+  }
+  filtered.forEach(a => feed.appendChild(makeCard(a)));
+}
+
+// ── SSE 연결 ──────────────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource("/stream");
+
+  es.onmessage = (e) => {
+    if (!e.data || e.data.startsWith(":")) return;
+    let a;
+    try { a = JSON.parse(e.data); } catch { return; }
+
+    // 중복 제거
+    if (allArticles.some(x => x.id === a.id)) return;
+
+    allArticles.unshift(a);
+    if (allArticles.length > 500) allArticles.pop();
+
+    incCount(a.category);
+
+    if (!currentCat || a.category === currentCat) {
+      prependCard(a);
+    }
+  };
+
+  es.onopen = () => {
+    document.getElementById("status-text").textContent = "실시간 연결됨";
+    document.getElementById("live-badge").className = "badge live";
+  };
+
+  es.onerror = () => {
+    document.getElementById("status-text").textContent = "재연결 중...";
+    document.getElementById("live-badge").className = "badge";
+    es.close();
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+// ── 수동 크롤링 ───────────────────────────────────────────────────────────
+async function crawlNow() {
+  document.getElementById("status-text").textContent = "크롤링 중...";
+  const res  = await fetch("/api/crawl", { method: "POST" });
+  const data = await res.json();
+  document.getElementById("status-text").textContent =
+    `완료 — 새 기사 ${data.new}개`;
+  setTimeout(() => {
+    document.getElementById("status-text").textContent = "실시간 연결됨";
+  }, 3000);
+}
+
+// ── 간격 변경 ─────────────────────────────────────────────────────────────
+async function applyInterval() {
+  const v = parseInt(document.getElementById("interval-input").value, 10);
+  if (!v || v < 10) return alert("최소 10초 이상 입력하세요.");
+  const res  = await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ interval: v }),
+  });
+  const data = await res.json();
+  document.getElementById("stat-interval").textContent = data.interval + "초";
+}
+
+// ── info 폴링 ─────────────────────────────────────────────────────────────
+async function pollInfo() {
+  try {
+    const res  = await fetch("/api/info");
+    const data = await res.json();
+    if (data.last_crawl) {
+      document.getElementById("stat-last").textContent =
+        data.last_crawl.slice(11, 19);
+    }
+  } catch {}
+}
+
+// ── scroll-top 버튼 ──────────────────────────────────────────────────────
+window.addEventListener("scroll", () => {
+  document.getElementById("scroll-top").classList.toggle("show", window.scrollY > 300);
+});
+
+// ── 초기화 ────────────────────────────────────────────────────────────────
+connectSSE();
+setInterval(pollInfo, 5000);
+</script>
+</body>
+</html>

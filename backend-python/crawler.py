@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-실시간 네이버 뉴스 크롤러
-실행: python crawler.py
-종료: Ctrl+C
+네이버 뉴스 크롤러 엔진
+- CLI 단독 실행: python crawler.py
+- Flask 앱에서 import: from crawler import CrawlerEngine
 """
 
-import time
-import json
 import hashlib
+import json
+import re
 import signal
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
+from threading import Event, Lock, Thread
+from typing import Callable
 
 try:
     import feedparser
@@ -19,13 +22,9 @@ except ImportError:
     print("feedparser 설치 필요: pip install feedparser")
     sys.exit(1)
 
-# ─── 설정 ────────────────────────────────────────────────────────────────────
+# ─── 상수 ────────────────────────────────────────────────────────────────────
 
-POLL_INTERVAL = 60          # 폴링 간격 (초), 환경변수 POLL_INTERVAL로 덮어쓰기 가능
-SAVE_TO_FILE  = True        # True이면 articles.json에 결과 저장
-OUTPUT_FILE   = "articles.json"
-
-NAVER_RSS_FEEDS = {
+NAVER_RSS_FEEDS: dict[str, str] = {
     "속보":      "https://news.naver.com/main/rss/breaking.nhn",
     "정치":      "https://news.naver.com/main/rss/politics.nhn",
     "경제":      "https://news.naver.com/main/rss/economic.nhn",
@@ -37,166 +36,223 @@ NAVER_RSS_FEEDS = {
     "스포츠":    "https://news.naver.com/main/rss/sports.nhn",
 }
 
-# 크롤링할 카테고리 목록 (None 이면 전체)
-ACTIVE_CATEGORIES = ["속보", "정치", "경제", "사회", "IT/과학"]
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-}
+# ─── 엔진 ────────────────────────────────────────────────────────────────────
 
-# ─── 상태 ────────────────────────────────────────────────────────────────────
+class CrawlerEngine:
+    """RSS 폴링 크롤러 엔진.
 
-seen_ids:    set[str]  = set()
-articles_db: list[dict] = []
-running = True
+    Parameters
+    ----------
+    categories:
+        크롤링할 카테고리 이름 목록. None 이면 전체.
+    interval:
+        폴링 간격(초).
+    on_article:
+        새 기사가 발견될 때마다 호출되는 콜백 ``(article: dict) -> None``.
+    """
 
+    def __init__(
+        self,
+        categories: list[str] | None = None,
+        interval: int = 60,
+        on_article: Callable[[dict], None] | None = None,
+    ):
+        self.categories  = categories or list(NAVER_RSS_FEEDS.keys())
+        self.interval    = interval
+        self.on_article  = on_article
 
-def _signal_handler(sig, frame):
-    global running
-    print("\n\n크롤러 종료 중...")
-    running = False
+        self._seen:     set[str]   = set()
+        self._articles: list[dict] = []
+        self._lock      = Lock()
+        self._stop_evt  = Event()
+        self._thread: Thread | None = None
 
+        # 상태
+        self.last_crawl: str | None  = None
+        self.total_count: int        = 0
+        self.status: str             = "idle"   # idle | running | stopped
 
-signal.signal(signal.SIGINT, _signal_handler)
-signal.signal(signal.SIGTERM, _signal_handler)
+    # ── 공개 메서드 ───────────────────────────────────────────────────────────
 
-# ─── 핵심 함수 ────────────────────────────────────────────────────────────────
+    def start(self):
+        """백그라운드 스레드에서 폴링 시작."""
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_evt.clear()
+        self._thread = Thread(target=self._loop, daemon=True)
+        self._thread.start()
+        self.status = "running"
 
-def _make_id(url: str) -> str:
-    return hashlib.md5(url.encode()).hexdigest()
+    def stop(self):
+        """폴링 중단."""
+        self._stop_evt.set()
+        self.status = "stopped"
 
+    def crawl_now(self) -> int:
+        """즉시 한 번 크롤링 (동기). 새 기사 수 반환."""
+        return self._crawl_once()
 
-def _parse_pub_time(entry) -> str:
-    if getattr(entry, "published_parsed", None):
-        try:
-            return datetime(*entry.published_parsed[:6]).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            pass
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    def get_articles(
+        self,
+        category: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        with self._lock:
+            items = self._articles
+            if category:
+                items = [a for a in items if a["category"] == category]
+            # 최신순
+            items = list(reversed(items))
+            return items[offset : offset + limit]
 
+    def info(self) -> dict:
+        return {
+            "status":      self.status,
+            "total":       self.total_count,
+            "last_crawl":  self.last_crawl,
+            "interval":    self.interval,
+            "categories":  self.categories,
+        }
 
-def fetch_rss(category: str, url: str) -> list[dict]:
-    """RSS 피드를 파싱해 새 기사만 반환."""
-    try:
-        feed = feedparser.parse(url, request_headers=HEADERS)
-        if feed.bozo and not feed.entries:
-            raise ValueError(feed.bozo_exception)
+    # ── 내부 ─────────────────────────────────────────────────────────────────
 
-        new_articles = []
-        for entry in feed.entries:
-            link = entry.get("link") or entry.get("id", "")
-            article_id = _make_id(link)
-            if article_id in seen_ids:
+    def _loop(self):
+        while not self._stop_evt.is_set():
+            self._crawl_once()
+            self._stop_evt.wait(timeout=self.interval)
+
+    def _crawl_once(self) -> int:
+        self.last_crawl = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_count = 0
+        for cat in self.categories:
+            url = NAVER_RSS_FEEDS.get(cat)
+            if not url:
                 continue
+            for article in self._fetch_rss(cat, url):
+                with self._lock:
+                    self._seen.add(article["id"])
+                    self._articles.append(article)
+                    self.total_count += 1
+                new_count += 1
+                if self.on_article:
+                    self.on_article(article)
+        return new_count
 
-            source = "네이버뉴스"
-            if hasattr(entry, "source") and isinstance(entry.source, dict):
-                source = entry.source.get("title", source)
+    def _fetch_rss(self, category: str, url: str) -> list[dict]:
+        try:
+            feed = feedparser.parse(url, request_headers={"User-Agent": _UA})
+            if feed.bozo and not feed.entries:
+                raise ValueError(feed.bozo_exception)
 
-            summary = entry.get("summary", "")
-            # HTML 태그 간단 제거
-            import re
-            summary = re.sub(r"<[^>]+>", "", summary).strip()
+            results = []
+            for entry in feed.entries:
+                link = entry.get("link") or entry.get("id", "")
+                aid  = hashlib.md5(link.encode()).hexdigest()
+                if aid in self._seen:
+                    continue
 
-            new_articles.append({
-                "id":         article_id,
-                "category":   category,
-                "title":      entry.get("title", "").strip(),
-                "link":       link,
-                "summary":    summary[:300],
-                "published":  _parse_pub_time(entry),
-                "source":     source,
-                "crawled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            })
+                pub = ""
+                if getattr(entry, "published_parsed", None):
+                    try:
+                        pub = datetime(*entry.published_parsed[:6]).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    except Exception:
+                        pass
+                pub = pub or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        return new_articles
+                source = "네이버뉴스"
+                if hasattr(entry, "source") and isinstance(entry.source, dict):
+                    source = entry.source.get("title", source)
 
-    except Exception as e:
-        print(f"  [오류] {category} RSS 파싱 실패: {e}")
-        return []
+                summary = re.sub(r"<[^>]+>", "", entry.get("summary", "")).strip()
 
+                results.append({
+                    "id":         aid,
+                    "category":   category,
+                    "title":      entry.get("title", "").strip(),
+                    "link":       link,
+                    "summary":    summary[:300],
+                    "published":  pub,
+                    "source":     source,
+                    "crawled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+            return results
 
-def print_article(article: dict):
-    """기사 한 건을 콘솔에 출력."""
-    divider = "─" * 60
-    print(f"\n{divider}")
-    print(f"  [{article['category']}]  {article['published']}  |  {article['source']}")
-    print(f"  {article['title']}")
-    print(f"  {article['link']}")
-    if article["summary"]:
-        preview = article["summary"][:120].replace("\n", " ")
-        print(f"  {preview}{'...' if len(article['summary']) > 120 else ''}")
-    print(divider)
-
-
-def save_articles():
-    if not SAVE_TO_FILE:
-        return
-    output_path = Path(__file__).parent / OUTPUT_FILE
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(articles_db, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"  [오류] {category}: {e}")
+            return []
 
 
-def crawl_once():
-    """카테고리 전체를 한 번 크롤링."""
-    now = datetime.now().strftime("%H:%M:%S")
-    categories = ACTIVE_CATEGORIES or list(NAVER_RSS_FEEDS.keys())
-    print(f"\n[{now}] 크롤링 시작 ({len(categories)}개 카테고리)...")
+# ─── CLI 진입점 ───────────────────────────────────────────────────────────────
 
-    new_count = 0
-    for category in categories:
-        url = NAVER_RSS_FEEDS.get(category)
-        if not url:
-            print(f"  [경고] '{category}' 카테고리 URL 없음, 건너뜀")
-            continue
+def _cli():
+    import os
 
-        articles = fetch_rss(category, url)
-        for article in articles:
-            seen_ids.add(article["id"])
-            articles_db.append(article)
-            print_article(article)
-            new_count += 1
+    interval   = int(os.environ.get("POLL_INTERVAL", 60))
+    categories = os.environ.get("CATEGORIES", "").split(",") if os.environ.get("CATEGORIES") else None
+    save_file  = Path(__file__).parent / "articles.json"
 
-    if new_count:
-        save_articles()
-        print(f"\n  → 새 기사 {new_count}개 발견 (누적 {len(articles_db)}개)")
-    else:
-        print(f"  → 새 기사 없음 (누적 {len(articles_db)}개)")
+    def on_article(a: dict):
+        print(f"\n{'─'*60}")
+        print(f"  [{a['category']}] {a['published']} | {a['source']}")
+        print(f"  {a['title']}")
+        print(f"  {a['link']}")
+        if a["summary"]:
+            print(f"  {a['summary'][:120]}{'...' if len(a['summary'])>120 else ''}")
+        print("─" * 60)
 
-# ─── 진입점 ──────────────────────────────────────────────────────────────────
-
-def main():
-    interval = int(__import__("os").environ.get("POLL_INTERVAL", POLL_INTERVAL))
+    engine = CrawlerEngine(
+        categories=categories,
+        interval=interval,
+        on_article=on_article,
+    )
 
     print("=" * 60)
     print("  실시간 네이버 뉴스 크롤러")
     print(f"  폴링 간격 : {interval}초")
-    cats = ACTIVE_CATEGORIES or list(NAVER_RSS_FEEDS.keys())
-    print(f"  카테고리  : {', '.join(cats)}")
-    if SAVE_TO_FILE:
-        print(f"  저장 파일 : {Path(__file__).parent / OUTPUT_FILE}")
+    print(f"  카테고리  : {', '.join(engine.categories)}")
+    print(f"  저장 파일 : {save_file}")
     print("  종료      : Ctrl+C")
     print("=" * 60)
 
+    running = True
+
+    def _stop(sig, frame):
+        nonlocal running
+        print("\n\n크롤러 종료 중...")
+        running = False
+
+    signal.signal(signal.SIGINT,  _stop)
+    signal.signal(signal.SIGTERM, _stop)
+
     while running:
-        crawl_once()
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"\n[{now}] 크롤링 시작...")
+        n = engine.crawl_now()
+        print(f"  → 새 기사 {n}개 (누적 {engine.total_count}개)")
+
+        if engine.total_count:
+            with open(save_file, "w", encoding="utf-8") as f:
+                json.dump(engine.get_articles(limit=10000), f, ensure_ascii=False, indent=2)
+
         if not running:
             break
-        print(f"\n  다음 크롤링까지 {interval}초 대기 중... (Ctrl+C로 종료)")
+        print(f"  다음 크롤링까지 {interval}초 대기... (Ctrl+C로 종료)")
         for _ in range(interval):
             if not running:
                 break
             time.sleep(1)
 
-    print(f"\n총 {len(articles_db)}개 기사 수집 완료.")
-    if SAVE_TO_FILE and articles_db:
-        save_articles()
-        print(f"결과 저장: {Path(__file__).parent / OUTPUT_FILE}")
+    print(f"\n총 {engine.total_count}개 기사 수집 완료.")
 
 
 if __name__ == "__main__":
-    main()
+    _cli()
