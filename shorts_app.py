@@ -68,6 +68,26 @@ def _run_job(job_id: str, images: list, audio, subtitle, output: str, cfg: dict)
         _update_job(job_id, status="error", message=str(e))
 
 
+def _run_mv_job(job_id: str, images: list, music: str,
+                lrc_text: str, output: str, cfg: dict):
+    try:
+        _update_job(job_id, status="running", progress=0, message="뮤직비디오 제작 시작...")
+        sys.path.insert(0, str(Path(__file__).parent))
+        import make_music_video
+        result = make_music_video.build_music_video(
+            images=images, audio=music, lrc_text=lrc_text,
+            output=output, cfg=cfg,
+            progress_cb=_progress_cb(job_id),
+        )
+        _update_job(job_id, status="done", progress=100,
+                    message=f"뮤직비디오 완료! {result['size_mb']}MB · {result['duration_sec']:.0f}초",
+                    result=result)
+    except Exception as e:
+        import traceback
+        _update_job(job_id, status="error",
+                    message=str(e) + "\n" + traceback.format_exc())
+
+
 # ─── 라우트 ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -174,6 +194,83 @@ def download(job_id: str):
         return jsonify({"error": "파일 없음"}), 404
     return send_file(job["output"], as_attachment=True,
                      download_name="shorts_output.mp4")
+
+
+@app.route("/generate_lyrics", methods=["POST"])
+def generate_lyrics_api():
+    """Claude AI로 뉴스 기사 → 가사 생성"""
+    data = request.get_json(force=True, silent=True) or {}
+    article = data.get("article", "").strip()
+    style   = data.get("style",   "kpop")
+    duration = int(data.get("duration", 60))
+
+    if not article:
+        return jsonify({"error": "기사 내용을 입력해주세요."}), 400
+
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import lyrics_generator
+        result = lyrics_generator.generate_lyrics(article, style, duration)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/generate_mv", methods=["POST"])
+def generate_mv():
+    """뮤직비디오형 쇼츠 생성"""
+    job_id  = uuid.uuid4().hex[:10]
+    job_dir = UPLOAD_DIR / job_id
+    job_dir.mkdir(parents=True)
+
+    # 이미지 (최대 6장)
+    images = []
+    for i in range(6):
+        p = save_upload(request.files.get(f"mv_image_{i}"), job_dir)
+        if p:
+            images.append(str(p))
+
+    if not images:
+        return jsonify({"error": "이미지를 1장 이상 업로드해주세요."}), 400
+
+    music = save_upload(request.files.get("mv_music"), job_dir)
+    if not music:
+        return jsonify({"error": "수노 음악 파일을 업로드해주세요."}), 400
+
+    lrc_text = request.form.get("lrc_text", "")
+
+    form = request.form
+    cfg = {
+        "width":         int(form.get("mv_width",  720)),
+        "height":        int(form.get("mv_height", 1280)),
+        "fps":           30,
+        "photo_duration": 4.0,
+        "transition":    float(form.get("mv_transition", 0.6)),
+        "zoom_ratio":    0.04,
+        "crf":           int(form.get("mv_crf", 23)),
+        "audio_norm":    False,
+        "effect":        form.get("mv_effect", "ken_burns"),
+        "lyric_font":    form.get("mv_font",   "NanumGothic"),
+        "lyric_size":    int(form.get("mv_lyric_size", 36)),
+        "lyric_color":   form.get("mv_lyric_color", "&H00FFFFFF"),
+        "lyric_glow":    form.get("mv_lyric_glow",  "&H00B469FF"),
+    }
+
+    output = str(job_dir / "mv_output.mp4")
+
+    with JOBS_LOCK:
+        JOBS[job_id] = {
+            "status": "queued", "progress": 0, "message": "대기 중...",
+            "output": output, "log": [], "result": None, "type": "mv",
+        }
+
+    t = threading.Thread(
+        target=_run_mv_job,
+        args=(job_id, images, str(music), lrc_text, output, cfg),
+        daemon=True,
+    )
+    t.start()
+    return jsonify({"job_id": job_id})
 
 
 @app.route("/thumbnail/<job_id>")
