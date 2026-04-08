@@ -198,7 +198,7 @@ def download(job_id: str):
 
 @app.route("/generate_lyrics", methods=["POST"])
 def generate_lyrics_api():
-    """Claude AI로 뉴스 기사 → 가사 생성"""
+    """Claude AI로 뉴스 기사 → 가사 생성 (ANTHROPIC_API_KEY 필요)"""
     data = request.get_json(force=True, silent=True) or {}
     article = data.get("article", "").strip()
     style   = data.get("style",   "kpop")
@@ -214,6 +214,31 @@ def generate_lyrics_api():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/convert_lrc", methods=["POST"])
+def convert_lrc():
+    """가사 텍스트 → LRC 자동 변환 (무료, API 불필요)"""
+    data = request.get_json(force=True, silent=True) or {}
+    lyrics_text = data.get("lyrics", "").strip()
+    duration    = int(data.get("duration", 60))
+    title       = data.get("title", "뮤직비디오 뉴스")
+
+    if not lyrics_text:
+        return jsonify({"error": "가사를 입력해주세요."}), 400
+
+    # 빈 줄·섹션 태그([버스], [코러스] 등) 제외
+    lines = [
+        l.strip() for l in lyrics_text.splitlines()
+        if l.strip() and not (l.strip().startswith("[") and l.strip().endswith("]"))
+    ]
+    if not lines:
+        return jsonify({"error": "유효한 가사 줄이 없습니다."}), 400
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from lyrics_generator import _auto_lrc
+    lrc = _auto_lrc(lines, duration, title)
+    return jsonify({"lrc": lrc, "line_count": len(lines)})
 
 
 @app.route("/generate_mv", methods=["POST"])
@@ -277,9 +302,14 @@ def generate_mv():
 def thumbnail(job_id: str):
     thumb = UPLOAD_DIR / job_id / "thumb.jpg"
     if not thumb.exists():
-        # 영상에서 썸네일 추출
-        output = UPLOAD_DIR / job_id / "output.mp4"
-        if not output.exists():
+        # output.mp4 또는 mv_output.mp4 찾기
+        output = None
+        for fname in ("output.mp4", "mv_output.mp4"):
+            candidate = UPLOAD_DIR / job_id / fname
+            if candidate.exists():
+                output = candidate
+                break
+        if not output:
             return jsonify({"error": "없음"}), 404
         import subprocess
         subprocess.run(

@@ -356,6 +356,29 @@
   }
   .mv-result-wrap h3 { font-size: 16px; margin-bottom: 6px; color: #065f46; }
   .mv-result-wrap p  { font-size: 13px; color: #6b7280; margin-bottom: 14px; }
+
+  /* ── 서브탭 (가사 직접입력 / LRC 업로드) ── */
+  .sub-tab-nav {
+    display: flex; gap: 2px; margin-bottom: 12px;
+    background: #f0f0ec; border-radius: 8px; padding: 3px;
+  }
+  .sub-tab-btn {
+    flex: 1; padding: 7px 10px; border: none;
+    border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all .15s;
+    background: transparent; color: #888;
+  }
+  .sub-tab-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+  /* ── 길이 빠른선택 버튼 ── */
+  .dur-btn {
+    padding: 5px 10px; border: 1.5px solid #e0e0da;
+    border-radius: 6px; font-size: 12px; font-weight: 500;
+    cursor: pointer; background: #fff; color: #555;
+    transition: all .15s;
+  }
+  .dur-btn:hover { border-color: #bbb; }
+  .dur-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 </style>
 </head>
 <body>
@@ -550,87 +573,65 @@
   <!-- ══════════════════ TAB: 뮤직비디오 뉴스 ══════════════════ -->
   <div id="panel-mv" class="tab-panel">
 
-    <!-- 1단계: 가사 생성 -->
+    <!-- 1단계: 가사 입력 -->
     <div class="mv-step">
-      <div class="step-header">1단계 — 뉴스 기사 입력 &amp; AI 가사 생성</div>
+      <div class="step-header">1단계 — 가사 입력</div>
 
-      <textarea class="mv-textarea" id="mvArticle"
-        placeholder="뉴스 기사 내용을 붙여넣으세요 (한국어)...&#10;&#10;예) 정부는 오늘 새로운 경제 정책을 발표했습니다. 이번 정책에는..."></textarea>
+      <!-- 서브탭: 직접입력 / LRC 파일 -->
+      <div class="sub-tab-nav">
+        <button class="sub-tab-btn active" data-subtab="lyrics-text">직접 입력</button>
+        <button class="sub-tab-btn" data-subtab="lrc-file">LRC 파일 업로드</button>
+      </div>
 
-      <div class="settings-grid" style="margin-top:10px">
-        <div class="settings-card">
-          <label>음악 스타일</label>
-          <select id="mvStyle">
-            <option value="kpop">K-팝 (밝고 신나는)</option>
-            <option value="hiphop">힙합 / 랩 (강렬한)</option>
-            <option value="ballad">발라드 (감성적)</option>
-            <option value="trot">트로트 (신명나는)</option>
-            <option value="pop">팝 (캐치한)</option>
-          </select>
+      <!-- 직접 입력 패널 -->
+      <div id="sub-lyrics-text" class="sub-tab-panel" style="display:block">
+        <textarea class="mv-textarea" id="mvLyricsRaw" rows="8"
+          placeholder="가사를 한 줄씩 입력하세요.&#10;[버스1] 같은 섹션 태그는 자동으로 제외됩니다.&#10;&#10;예)&#10;오늘의 뉴스 전해드립니다&#10;세상이 이렇게 돌아가고 있어&#10;함께 들어봐요 우리의 이야기"></textarea>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#888;flex-shrink:0">총 길이</span>
+          <div style="display:flex;gap:6px">
+            <button class="dur-btn active" data-sec="30">30초</button>
+            <button class="dur-btn" data-sec="45">45초</button>
+            <button class="dur-btn" data-sec="60">60초</button>
+            <button class="dur-btn" data-sec="90">90초</button>
+            <button class="dur-btn" data-sec="120">120초</button>
+          </div>
+          <input type="number" id="mvConvDuration" value="60" min="10" max="300"
+            style="width:64px;border:1px solid #e0e0da;border-radius:6px;padding:5px 8px;font-size:13px">
+          <span style="font-size:12px;color:#aaa">초</span>
         </div>
-        <div class="settings-card">
-          <label>목표 음악 길이 (초)</label>
-          <div class="slider-row">
-            <input type="range" id="mvDuration" min="30" max="120" step="5" value="60">
-            <span class="slider-value" id="mvDurationVal">60초</span>
+
+        <div style="margin-top:10px">
+          <button class="btn-generate" id="btnConvLrc"
+            style="padding:12px;font-size:14px">LRC 자동 변환</button>
+        </div>
+        <div class="error-msg" id="mvConvError"></div>
+      </div>
+
+      <!-- LRC 파일 업로드 패널 -->
+      <div id="sub-lrc-file" class="sub-tab-panel" style="display:none">
+        <div class="upload-card" id="mvLrcCard">
+          <input type="file" id="mvLrcInput" accept=".lrc,.txt">
+          <div class="upload-icon">📄</div>
+          <div class="upload-info">
+            <strong>LRC 파일</strong>
+            <span>.lrc · .txt — [mm:ss.cc]가사 형식</span>
+            <div class="upload-filelist" id="mvLrcList"></div>
           </div>
         </div>
       </div>
 
-      <div class="generate-wrap">
-        <button class="btn-generate" id="btnGenLyrics">AI 가사 생성 (Claude)</button>
-      </div>
-
-      <div class="progress-wrap" id="lyricsProgressWrap">
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" id="lyricsProgressFill" style="width:30%;animation:indeterminate 1.5s ease-in-out infinite"></div>
+      <!-- LRC 편집기 (공통) -->
+      <div style="margin-top:14px">
+        <div class="lyrics-section-header">
+          <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">
+            LRC 타임코드 (편집 가능 · 가사 없으면 자막 없이 제작)
+          </span>
+          <button class="btn-copy" id="btnCopyLrc">복사</button>
         </div>
-        <div class="progress-msg">Claude AI가 가사를 작성 중입니다...</div>
-      </div>
-      <style>@keyframes indeterminate{0%{width:10%}50%{width:70%}100%{width:90%}}</style>
-
-      <div class="error-msg" id="mvLyricsError"></div>
-
-      <!-- 생성된 가사 표시 -->
-      <div id="mvLyricsPanel" style="display:none">
-        <div class="lyrics-box">
-          <div class="lyrics-title" id="mvLyricsTitle">노래 제목</div>
-
-          <div class="lyrics-section">
-            <div class="lyrics-section-header">
-              <span>Suno — Style of Music 필드에 붙여넣기</span>
-              <button class="btn-copy" onclick="copyEl('mvSunoStyle')">복사</button>
-            </div>
-            <textarea class="lyrics-textarea" id="mvSunoStyle" rows="2"></textarea>
-          </div>
-
-          <div class="lyrics-section">
-            <div class="lyrics-section-header">
-              <span>Suno — Lyrics 필드에 붙여넣기</span>
-              <button class="btn-copy" onclick="copyEl('mvSunoLyrics')">복사</button>
-            </div>
-            <textarea class="lyrics-textarea" id="mvSunoLyrics" rows="8"></textarea>
-          </div>
-
-          <div class="lyrics-section">
-            <div class="lyrics-section-header">
-              <span>LRC 자막 타이밍 (자동 생성 — 수정 가능)</span>
-              <button class="btn-copy" onclick="copyEl('mvLrc')">복사</button>
-            </div>
-            <textarea class="lyrics-textarea" id="mvLrc" rows="10"></textarea>
-          </div>
-        </div>
-
-        <div class="suno-guide">
-          <strong>Suno에서 음악 만들기</strong>
-          <ol>
-            <li><a href="https://suno.com" target="_blank">suno.com</a> 접속 → Create 클릭</li>
-            <li><strong>Custom</strong> 모드 활성화</li>
-            <li><em>Style of Music</em> 칸에 위 스타일 프롬프트 붙여넣기</li>
-            <li><em>Lyrics</em> 칸에 위 가사 붙여넣기</li>
-            <li>생성 후 MP3 다운로드</li>
-          </ol>
-        </div>
+        <textarea class="lyrics-textarea" id="mvLrc" rows="10"
+          placeholder="[00:00.00]첫 번째 가사&#10;[00:04.00]두 번째 가사&#10;[00:08.00]세 번째 가사"></textarea>
       </div>
     </div>
 
@@ -650,21 +651,21 @@
       </div>
       <div class="img-preview-grid" id="mvImgPreviews"></div>
 
-      <!-- 음악 업로드 -->
+      <!-- 수노 음악 업로드 -->
       <div class="upload-card" id="mvMusicCard">
         <input type="file" id="mvMusicInput" accept=".mp3,.wav,.m4a,.aac">
         <div class="upload-icon">🎵</div>
         <div class="upload-info">
-          <strong>수노 음악 파일 <span id="mvAudioBadge" class="sync-badge" style="display:none"></span></strong>
-          <span>MP3 · WAV · M4A — 수노에서 생성 후 다운로드</span>
+          <strong>수노 음악 <span id="mvAudioBadge" class="sync-badge" style="display:none"></span></strong>
+          <span>MP3 · WAV · M4A — suno.com에서 생성 후 다운로드</span>
           <div class="upload-filelist" id="mvMusicList"></div>
         </div>
       </div>
     </div>
 
-    <!-- 3단계: 스타일 설정 & 생성 -->
+    <!-- 3단계: 스타일 & 생성 -->
     <div class="mv-step">
-      <div class="step-header">3단계 — 뮤직비디오 스타일 설정 &amp; 생성</div>
+      <div class="step-header">3단계 — 스타일 설정 &amp; 뮤직비디오 생성</div>
 
       <div class="settings-grid">
         <div class="settings-card">
@@ -722,20 +723,24 @@
       </div>
 
       <div style="margin-top:10px">
-        <div style="font-size:12px;color:#888;margin-bottom:6px">글로우 색상 (스타일별)</div>
+        <div style="font-size:12px;color:#888;margin-bottom:6px">글로우 색상</div>
         <div class="glow-picker" id="glowPicker">
-          <div class="glow-swatch active" data-glow="&H00B469FF" data-label="K-팝 핑크"
-               style="background:#FF69B4" title="K-팝 핑크"></div>
-          <div class="glow-swatch" data-glow="&H0000D7FF" data-label="힙합 골드"
-               style="background:#FFD700" title="힙합 골드"></div>
-          <div class="glow-swatch" data-glow="&H00E16941" data-label="발라드 블루"
-               style="background:#4169E1" title="발라드 블루"></div>
-          <div class="glow-swatch" data-glow="&H000000FF" data-label="트로트 레드"
-               style="background:#FF0000" title="트로트 레드"></div>
-          <div class="glow-swatch" data-glow="&H00008CFF" data-label="팝 오렌지"
-               style="background:#FF8C00" title="팝 오렌지"></div>
-          <div class="glow-swatch" data-glow="&H00FFFF00" data-label="사이버 시안"
-               style="background:#00FFFF" title="사이버 시안"></div>
+          <div class="glow-swatch active" data-glow="&H00B469FF"
+               style="background:#FF69B4" title="핑크"></div>
+          <div class="glow-swatch" data-glow="&H0000D7FF"
+               style="background:#FFD700" title="골드"></div>
+          <div class="glow-swatch" data-glow="&H00E16941"
+               style="background:#4169E1" title="블루"></div>
+          <div class="glow-swatch" data-glow="&H000000FF"
+               style="background:#FF0000" title="레드"></div>
+          <div class="glow-swatch" data-glow="&H00008CFF"
+               style="background:#FF8C00" title="오렌지"></div>
+          <div class="glow-swatch" data-glow="&H00FFFF00"
+               style="background:#00FFFF" title="시안"></div>
+          <div class="glow-swatch" data-glow="&H0000FF00"
+               style="background:#00FF00" title="그린"></div>
+          <div class="glow-swatch" data-glow="&H00FFFFFF"
+               style="background:#FFFFFF;border:1px solid #ccc" title="화이트"></div>
         </div>
       </div>
 
@@ -1051,15 +1056,102 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ── 뮤직비디오 탭 ──────────────────────────────────────────────────────────
-const mvImgFiles = [];
 
+// 서브탭 전환 (직접입력 / LRC파일)
+document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    const target = this.dataset.subtab;
+    document.getElementById('sub-lyrics-text').style.display = (target === 'lyrics-text') ? 'block' : 'none';
+    document.getElementById('sub-lrc-file').style.display    = (target === 'lrc-file')    ? 'block' : 'none';
+  });
+});
+
+// 길이 빠른선택 버튼
+let mvConvSec = 60;
+document.querySelectorAll('.dur-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    mvConvSec = parseInt(this.dataset.sec);
+    document.getElementById('mvConvDuration').value = mvConvSec;
+  });
+});
+document.getElementById('mvConvDuration').addEventListener('input', function() {
+  mvConvSec = parseInt(this.value) || 60;
+  document.querySelectorAll('.dur-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.sec) === mvConvSec);
+  });
+});
+
+// LRC 자동 변환 버튼 (무료, 서버 API 없이도 JS로 처리)
+document.getElementById('btnConvLrc').addEventListener('click', async function() {
+  const lyrics = document.getElementById('mvLyricsRaw').value.trim();
+  if (!lyrics) { showConvError('가사를 입력해주세요.'); return; }
+  hideConvError();
+  this.disabled = true; this.textContent = '변환 중...';
+
+  try {
+    const res = await fetch('/convert_lrc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lyrics, duration: mvConvSec, title: '뮤직비디오 뉴스' }),
+    });
+    const data = await res.json();
+    if (data.error) { showConvError(data.error); return; }
+    document.getElementById('mvLrc').value = data.lrc;
+    // LRC 편집기로 스크롤
+    document.getElementById('mvLrc').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    showConvError('오류: ' + e.message);
+  } finally {
+    this.disabled = false; this.textContent = 'LRC 자동 변환';
+  }
+});
+
+// LRC 파일 업로드 → 텍스트 읽어 편집기에 표시
+document.getElementById('mvLrcInput').addEventListener('change', function() {
+  const card = document.getElementById('mvLrcCard');
+  const list = document.getElementById('mvLrcList');
+  if (!this.files[0]) { list.textContent = ''; card.classList.remove('filled'); return; }
+  list.textContent = this.files[0].name;
+  card.classList.add('filled');
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('mvLrc').value = e.target.result; };
+  reader.readAsText(this.files[0], 'utf-8');
+});
+
+// LRC 복사 버튼
+document.getElementById('btnCopyLrc').addEventListener('click', function() {
+  const val = document.getElementById('mvLrc').value;
+  navigator.clipboard.writeText(val).then(() => {
+    const orig = this.textContent;
+    this.textContent = '복사됨!';
+    this.style.color = '#059669';
+    setTimeout(() => { this.textContent = orig; this.style.color = ''; }, 1500);
+  }).catch(() => {
+    const el = document.getElementById('mvLrc');
+    el.select(); document.execCommand('copy');
+  });
+});
+
+function showConvError(msg) {
+  const el = document.getElementById('mvConvError');
+  el.textContent = '⚠️ ' + msg; el.style.display = 'block';
+}
+function hideConvError() {
+  document.getElementById('mvConvError').style.display = 'none';
+}
+
+// 사진 파일
+const mvImgFiles = [];
 document.getElementById('mvImgInput').addEventListener('change', function(e) {
   const newFiles = Array.from(e.target.files).slice(0, 6 - mvImgFiles.length);
   newFiles.forEach(f => { if (mvImgFiles.length < 6) mvImgFiles.push(f); });
   renderMvImgPreviews();
   this.value = '';
 });
-
 function renderMvImgPreviews() {
   const el   = document.getElementById('mvImgPreviews');
   const card = document.getElementById('mvImgCard');
@@ -1080,10 +1172,10 @@ function removeMvImg(i) { mvImgFiles.splice(i, 1); renderMvImgPreviews(); }
 
 // 음악 파일 길이 읽기
 document.getElementById('mvMusicInput').addEventListener('change', function() {
-  const card = document.getElementById('mvMusicCard');
-  const list = document.getElementById('mvMusicList');
+  const card  = document.getElementById('mvMusicCard');
+  const list  = document.getElementById('mvMusicList');
   const badge = document.getElementById('mvAudioBadge');
-  const name = this.files[0] ? this.files[0].name : '';
+  const name  = this.files[0] ? this.files[0].name : '';
   list.textContent = name;
   card.classList.toggle('filled', !!name);
   if (this.files[0]) {
@@ -1095,15 +1187,10 @@ document.getElementById('mvMusicInput').addEventListener('change', function() {
       URL.revokeObjectURL(a.src);
     };
     a.src = URL.createObjectURL(this.files[0]);
-  } else {
-    badge.style.display = 'none';
-  }
+  } else { badge.style.display = 'none'; }
 });
 
 // 슬라이더
-document.getElementById('mvDuration').addEventListener('input', function() {
-  document.getElementById('mvDurationVal').textContent = this.value + '초';
-});
 document.getElementById('mvTransition').addEventListener('input', function() {
   document.getElementById('mvTransitionVal').textContent = this.value + '초';
 });
@@ -1111,7 +1198,7 @@ document.getElementById('mvLyricSize').addEventListener('input', function() {
   document.getElementById('mvLyricSizeVal').textContent = this.value;
 });
 
-// 효과 버튼
+// 사진 효과 버튼
 let mvEffect = 'ken_burns';
 document.getElementById('mvEffectGrid').addEventListener('click', function(e) {
   const btn = e.target.closest('.effect-btn');
@@ -1131,125 +1218,20 @@ document.getElementById('glowPicker').addEventListener('click', function(e) {
   mvGlowColor = sw.dataset.glow;
 });
 
-// 스타일 변경 시 글로우 색상 자동 변경
-const styleGlowMap = {
-  kpop:   '&H00B469FF',
-  hiphop: '&H0000D7FF',
-  ballad: '&H00E16941',
-  trot:   '&H000000FF',
-  pop:    '&H00008CFF',
-};
-const glowSwatchMap = {
-  '&H00B469FF': 0, '&H0000D7FF': 1, '&H00E16941': 2,
-  '&H000000FF': 3, '&H00008CFF': 4,
-};
-document.getElementById('mvStyle').addEventListener('change', function() {
-  const glow = styleGlowMap[this.value] || '&H00B469FF';
-  mvGlowColor = glow;
-  const swatches = document.querySelectorAll('.glow-swatch');
-  swatches.forEach(s => s.classList.remove('active'));
-  const idx = glowSwatchMap[glow];
-  if (idx !== undefined && swatches[idx]) swatches[idx].classList.add('active');
-});
-
-// 복사 헬퍼
-function copyEl(id) {
-  const el = document.getElementById(id);
-  navigator.clipboard.writeText(el.value).then(() => {
-    const btn = el.previousElementSibling?.querySelector('.btn-copy') ||
-                el.parentElement.previousElementSibling?.querySelector('.btn-copy');
-    // 잠깐 "복사됨!" 표시
-    const allCopy = document.querySelectorAll('.btn-copy');
-    allCopy.forEach(b => { if (b.onclick && b.onclick.toString().includes(id)) {
-      const orig = b.textContent;
-      b.textContent = '복사됨!';
-      b.style.color = '#059669';
-      setTimeout(() => { b.textContent = orig; b.style.color = ''; }, 1500);
-    }});
-  }).catch(() => { el.select(); document.execCommand('copy'); });
-}
-
-// ── AI 가사 생성 ───────────────────────────────────────────────────────────
-document.getElementById('btnGenLyrics').addEventListener('click', genLyrics);
-
-async function genLyrics() {
-  const article = document.getElementById('mvArticle').value.trim();
-  if (!article) {
-    showMvLyricsError('뉴스 기사 내용을 입력해주세요.');
-    return;
-  }
-  hideMvLyricsError();
-  document.getElementById('btnGenLyrics').disabled = true;
-  document.getElementById('btnGenLyrics').textContent = '생성 중...';
-  document.getElementById('lyricsProgressWrap').style.display = 'block';
-  document.getElementById('mvLyricsPanel').style.display = 'none';
-
-  try {
-    const res = await fetch('/generate_lyrics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        article,
-        style:    document.getElementById('mvStyle').value,
-        duration: parseInt(document.getElementById('mvDuration').value),
-      }),
-    });
-    const data = await res.json();
-    if (data.error) { showMvLyricsError(data.error); return; }
-
-    document.getElementById('mvLyricsTitle').textContent = data.title || '';
-    document.getElementById('mvSunoStyle').value   = data.suno_style  || '';
-    document.getElementById('mvSunoLyrics').value  = data.suno_lyrics || '';
-    document.getElementById('mvLrc').value         = data.lrc         || '';
-    document.getElementById('mvLyricsPanel').style.display = 'block';
-
-    // 글로우 자동 적용
-    if (data.style_config && data.style_config.lyric_glow) {
-      mvGlowColor = data.style_config.lyric_glow;
-      const swatches = document.querySelectorAll('.glow-swatch');
-      swatches.forEach(s => s.classList.remove('active'));
-      const idx = glowSwatchMap[mvGlowColor];
-      if (idx !== undefined && swatches[idx]) swatches[idx].classList.add('active');
-    }
-  } catch (e) {
-    showMvLyricsError('서버 연결 오류: ' + e.message);
-  } finally {
-    document.getElementById('btnGenLyrics').disabled = false;
-    document.getElementById('btnGenLyrics').textContent = 'AI 가사 생성 (Claude)';
-    document.getElementById('lyricsProgressWrap').style.display = 'none';
-  }
-}
-
-function showMvLyricsError(msg) {
-  const el = document.getElementById('mvLyricsError');
-  el.textContent = '⚠️ ' + msg;
-  el.style.display = 'block';
-}
-function hideMvLyricsError() {
-  document.getElementById('mvLyricsError').style.display = 'none';
-}
-
 // ── 뮤직비디오 생성 ────────────────────────────────────────────────────────
 document.getElementById('btnGenMV').addEventListener('click', startGenMV);
 
 async function startGenMV() {
-  if (mvImgFiles.length === 0) {
-    showMvError('뉴스 사진을 1장 이상 업로드해주세요.');
-    return;
-  }
+  if (mvImgFiles.length === 0) { showMvError('뉴스 사진을 1장 이상 업로드해주세요.'); return; }
   const musicFile = document.getElementById('mvMusicInput').files[0];
-  if (!musicFile) {
-    showMvError('수노 음악 파일을 업로드해주세요.');
-    return;
-  }
+  if (!musicFile) { showMvError('수노 음악 파일을 업로드해주세요.'); return; }
   hideMvError();
   setMvUI('loading');
 
   const form = new FormData();
   mvImgFiles.forEach((f, i) => form.append(`mv_image_${i}`, f));
-  form.append('mv_music', musicFile);
-  form.append('lrc_text', document.getElementById('mvLrc').value || '');
-
+  form.append('mv_music',       musicFile);
+  form.append('lrc_text',       document.getElementById('mvLrc').value || '');
   const [w, h] = document.getElementById('mvResolution').value.split('x');
   form.append('mv_width',       w);
   form.append('mv_height',      h);
@@ -1265,10 +1247,7 @@ async function startGenMV() {
     const data = await res.json();
     if (data.error) { showMvError(data.error); setMvUI('idle'); return; }
     listenMvProgress(data.job_id);
-  } catch (e) {
-    showMvError('서버 연결 오류: ' + e.message);
-    setMvUI('idle');
-  }
+  } catch (e) { showMvError('서버 연결 오류: ' + e.message); setMvUI('idle'); }
 }
 
 function listenMvProgress(jobId) {
@@ -1278,18 +1257,11 @@ function listenMvProgress(jobId) {
     if (d.error) { showMvError(d.error); setMvUI('idle'); es.close(); return; }
     document.getElementById('mvProgressFill').style.width = d.pct + '%';
     document.getElementById('mvProgressMsg').textContent  = d.msg;
-    if (d.status === 'done') {
-      es.close(); showMvResult(jobId, d.msg);
-    } else if (d.status === 'error') {
-      es.close(); showMvError(d.msg); setMvUI('idle');
-    }
+    if (d.status === 'done') { es.close(); showMvResult(jobId, d.msg); }
+    else if (d.status === 'error') { es.close(); showMvError(d.msg); setMvUI('idle'); }
   };
-  es.onerror = function() {
-    es.close();
-    setTimeout(() => checkMvStatus(jobId), 1000);
-  };
+  es.onerror = function() { es.close(); setTimeout(() => checkMvStatus(jobId), 1000); };
 }
-
 async function checkMvStatus(jobId) {
   try {
     const res = await fetch(`/status/${jobId}`);
@@ -1299,7 +1271,6 @@ async function checkMvStatus(jobId) {
     else setTimeout(() => checkMvStatus(jobId), 1500);
   } catch(e) { setTimeout(() => checkMvStatus(jobId), 2000); }
 }
-
 function showMvResult(jobId, msg) {
   setMvUI('done');
   document.getElementById('mvResultInfo').textContent = msg;
@@ -1311,7 +1282,6 @@ function showMvResult(jobId, msg) {
   preview.innerHTML = '';
   preview.appendChild(img);
 }
-
 function setMvUI(state) {
   const btn  = document.getElementById('btnGenMV');
   const prog = document.getElementById('mvProgressWrap');
@@ -1331,9 +1301,7 @@ function showMvError(msg) {
   const el = document.getElementById('mvErrorMsg');
   el.textContent = '⚠️ ' + msg; el.style.display = 'block';
 }
-function hideMvError() {
-  document.getElementById('mvErrorMsg').style.display = 'none';
-}
+function hideMvError() { document.getElementById('mvErrorMsg').style.display = 'none'; }
 document.getElementById('mvBtnReset').addEventListener('click', function() {
   setMvUI('idle');
   document.getElementById('mvResultWrap').style.display = 'none';
