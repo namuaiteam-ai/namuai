@@ -1,110 +1,127 @@
 #!/usr/bin/env python3
 """
 뮤직비디오형 뉴스 쇼츠 제작기
-- 뉴스 사진 + 수노 음악(MP3) + LRC 가사 → MP4 (720×1280)
-- 가사가 음악 타이밍에 맞춰 뮤직비디오 스타일로 표시됨
-- make_shorts.py의 영상/오디오 파이프라인 재사용
+D:\\ttttt2 에서 server.py가 subprocess로 호출합니다.
+
+환경변수 (server.py → subprocess):
+  MV_IMAGES     : 콤마 구분 이미지 파일명 (예: mv_image1.jpg,mv_image2.jpg)
+  MV_EFFECT     : ken_burns | pan | tilt | zoom_in | zoom_out | shake
+  MV_FONT       : NanumGothic | Malgun Gothic | Arial
+  MV_LYRIC_SIZE : 가사 폰트 크기 (기본 36)
+  MV_LYRIC_GLOW : ASS 글로우 색상 (기본 &H00B469FF)
+  MV_TRANSITION : 전환 길이(초) (기본 0.5)
+  MV_WIDTH      : 영상 너비 (기본 720)
+  MV_HEIGHT     : 영상 높이 (기본 1280)
+
+입력 파일 (cwd = BASE_DIR):
+  mv_image1.jpg, mv_image2.jpg, ...  (뉴스 사진)
+  music.mp3                          (수노 음악)
+  lyrics.lrc                         (가사, 없으면 자막 없이 제작)
+
+출력: video/YYYY-MM-DD/mv_output.mp4
 """
 
+import json
+import os
 import re
+import subprocess
+import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
-from make_shorts import (
-    DEFAULTS,
-    check_ffmpeg,
-    check_file,
-    concat_clips,
-    get_media_duration,
-    make_clip,
-    merge_audio,
-    run,
-)
 
-# 뮤직비디오 기본 설정 (나레이션 쇼츠와 다른 값)
-MV_DEFAULTS = {
-    **DEFAULTS,
-    "audio_norm": False,       # 음악은 노멀라이즈 안 함 (원음 유지)
-    "lyric_font": "NanumGothic",
-    "lyric_size": 36,
-    "lyric_color": "&H00FFFFFF",    # 흰색
-    "lyric_glow": "&H00B469FF",     # 핑크 (K-pop 기본)
-    "lyric_outline": 3,
-    "lyric_shadow": 2,
+# ─── 설정 ────────────────────────────────────────────────────────────────────
+def _e(key, default): return os.environ.get(key, default)
+
+CWD    = Path(os.getcwd())
+TODAY  = datetime.now().strftime("%Y-%m-%d")
+OUT_DIR = CWD / "video" / TODAY
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT = str(OUT_DIR / "mv_output.mp4")
+
+CFG = {
+    "width":          int(_e("MV_WIDTH",      "720")),
+    "height":         int(_e("MV_HEIGHT",     "1280")),
+    "fps":            30,
+    "transition":     float(_e("MV_TRANSITION", "0.5")),
+    "zoom_ratio":     0.04,
+    "crf":            23,
+    "effect":         _e("MV_EFFECT",     "ken_burns"),
+    "lyric_font":     _e("MV_FONT",       "NanumGothic"),
+    "lyric_size":     int(_e("MV_LYRIC_SIZE", "36")),
+    "lyric_color":    "&H00FFFFFF",
+    "lyric_glow":     _e("MV_LYRIC_GLOW", "&H00B469FF"),
+    "lyric_outline":  3,
+    "lyric_shadow":   2,
     "lyric_margin_v": 90,
-    "lyric_fade_ms": 200,
+    "lyric_fade_ms":  200,
 }
 
 
-# ─── LRC 파서 ─────────────────────────────────────────────────────────────────
+# ─── ffmpeg 유틸 ──────────────────────────────────────────────────────────────
+def run_cmd(cmd: list, desc: str = ""):
+    print(f"  [{desc}]", flush=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg 오류 [{desc}]:\n{r.stderr[-3000:]}")
+    return r
 
+
+def get_duration(path: Path) -> float:
+    cmd = ["ffprobe", "-v", "quiet", "-print_format", "json",
+           "-show_format", str(path)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"ffprobe 실패: {r.stderr}")
+    return float(json.loads(r.stdout)["format"]["duration"])
+
+
+# ─── LRC 파서 ─────────────────────────────────────────────────────────────────
 def parse_lrc(text: str) -> list:
-    """
-    LRC 텍스트 파싱 → [{time_ms, text}, ...]
-    메타데이터 태그([ti:], [ar:] 등)는 무시.
-    """
     cues = []
     for line in text.splitlines():
-        line = line.strip()
-        # [mm:ss.cc] 또는 [mm:ss.xx] 형식
-        m = re.match(r"\[(\d{1,2}):(\d{2})\.(\d{2})\](.*)", line)
-        if not m:
-            # [mm:ss:cc] 콜론 구분도 허용
-            m = re.match(r"\[(\d{1,2}):(\d{2}):(\d{2,3})\](.*)", line)
+        m = re.match(r"\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)", line.strip())
         if m:
-            mm, ss, cc = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            # cc가 3자리면 ms, 2자리면 cs(×10)
-            ms_frac = cc if len(m.group(3)) == 3 else cc * 10
+            mm, ss = int(m.group(1)), int(m.group(2))
+            cc_str = m.group(3)
+            ms_frac = int(cc_str) if len(cc_str) == 3 else int(cc_str) * 10
             time_ms = mm * 60000 + ss * 1000 + ms_frac
             lyric = m.group(4).strip()
             if lyric:
                 cues.append({"time_ms": time_ms, "text": lyric})
-
-    # 시간순 정렬
     cues.sort(key=lambda c: c["time_ms"])
     return cues
 
 
-def _add_end_times(cues: list, total_ms: int) -> list:
-    """각 큐에 end_ms 추가 (다음 큐의 시작 시간 또는 총 길이)"""
+def add_end_times(cues: list, total_ms: int) -> list:
     for i, cue in enumerate(cues):
-        if i + 1 < len(cues):
-            cue["end_ms"] = cues[i + 1]["time_ms"]
-        else:
-            cue["end_ms"] = total_ms
+        cue["end_ms"] = cues[i + 1]["time_ms"] if i + 1 < len(cues) else total_ms
     return cues
 
 
-# ─── 뮤직비디오 스타일 ASS 생성 ───────────────────────────────────────────────
+# ─── 뮤직비디오 스타일 ASS 자막 ───────────────────────────────────────────────
+def make_lyric_ass(cues: list, cfg: dict) -> str:
+    w, h      = cfg["width"], cfg["height"]
+    font      = cfg["lyric_font"]
+    size      = cfg["lyric_size"]
+    color     = cfg["lyric_color"]
+    glow      = cfg["lyric_glow"]
+    outline   = cfg["lyric_outline"]
+    shadow    = cfg["lyric_shadow"]
+    margin_v  = cfg["lyric_margin_v"]
+    fade_ms   = cfg["lyric_fade_ms"]
+    cx        = w // 2
+    y_pos     = h - margin_v
 
-def make_lyric_ass(cues: list, w: int, h: int, cfg: dict) -> str:
-    """
-    LRC 큐 목록 → 뮤직비디오 스타일 ASS 자막
-    - 큰 폰트, 하단 중앙 배치
-    - 컬러 글로우 테두리
-    - 팝인(90→100% 스케일) + 페이드인/아웃
-    """
-    font      = cfg.get("lyric_font",     MV_DEFAULTS["lyric_font"])
-    size      = int(cfg.get("lyric_size", MV_DEFAULTS["lyric_size"]))
-    color     = cfg.get("lyric_color",    MV_DEFAULTS["lyric_color"])
-    glow      = cfg.get("lyric_glow",     MV_DEFAULTS["lyric_glow"])
-    outline   = int(cfg.get("lyric_outline", MV_DEFAULTS["lyric_outline"]))
-    shadow    = int(cfg.get("lyric_shadow",  MV_DEFAULTS["lyric_shadow"]))
-    margin_v  = int(cfg.get("lyric_margin_v", MV_DEFAULTS["lyric_margin_v"]))
-    fade_ms   = int(cfg.get("lyric_fade_ms",  MV_DEFAULTS["lyric_fade_ms"]))
-
-    cx    = w // 2
-    y_pos = h - margin_v
-
-    def tc(ms: int) -> str:
+    def tc(ms):
         h_, r = divmod(max(0, ms), 3600000)
         m_, r = divmod(r, 60000)
         s_, f = divmod(r, 1000)
         return f"{h_}:{m_:02d}:{s_:02d}.{f // 10:02d}"
 
     header = (
-        "[Script Info]\n"
-        "ScriptType: v4.00+\n"
+        "[Script Info]\nScriptType: v4.00+\n"
         f"PlayResX: {w}\nPlayResY: {h}\n"
         "ScaledBorderAndShadow: yes\n\n"
         "[V4+ Styles]\n"
@@ -119,25 +136,18 @@ def make_lyric_ass(cues: list, w: int, h: int, cfg: dict) -> str:
         "Format: Layer, Start, End, Style, Name, "
         "MarginL, MarginR, MarginV, Effect, Text\n"
     )
-
     events = []
     for cue in cues:
-        s    = cue["time_ms"]
-        e    = cue["end_ms"]
+        s, e = cue["time_ms"], cue["end_ms"]
         text = cue["text"].replace("\n", "\\N").strip()
-
         if not text:
             continue
-
-        dur = e - s
-        if dur <= fade_ms * 2:
-            # 짧은 큐: 페이드만
+        if e - s <= fade_ms * 2:
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(e)},Lyric,,0,0,0,,"
                 f"{{\\an2\\pos({cx},{y_pos})\\fad({fade_ms},{fade_ms})}}{text}"
             )
         else:
-            # 팝인(스케일 90→100%) + 페이드인/아웃
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(e)},Lyric,,0,0,0,,"
                 f"{{\\an2\\pos({cx},{y_pos})"
@@ -145,145 +155,172 @@ def make_lyric_ass(cues: list, w: int, h: int, cfg: dict) -> str:
                 f"\\fscx90\\fscy90"
                 f"\\t(0,{fade_ms},\\fscx100\\fscy100)}}{text}"
             )
-
     return header + "\n".join(events) + "\n"
 
 
-# ─── ASS 자막 오버레이 ─────────────────────────────────────────────────────────
+# ─── 영상 클립 생성 (make_shorts.py 재사용 or 독립 구현) ─────────────────────
+def _motion_filter(effect, idx, w, h, dur, fps, zoom):
+    frames = int(dur * fps)
+    scale  = f"scale={w * 2}:{h * 2},"
+    tail   = f":d={frames}:s={w}x{h}:fps={fps},setsar=1"
 
-def _burn_ass(video_path: Path, ass_path: Path, out_path: Path,
-              crf: int, progress_cb=None, step=0, total_steps=1) -> Path:
-    """ASS 자막을 영상에 합성 (ffmpeg ass 필터)"""
-    sub_str = str(ass_path).replace("\\", "/").replace(":", "\\:")
-    cmd = [
-        "ffmpeg", "-y", "-i", str(video_path),
-        "-vf", f"ass='{sub_str}'",
-        "-c:v", "libx264", "-preset", "fast", "-crf", str(crf),
-        "-c:a", "copy",
-        str(out_path),
-    ]
-    run(cmd, "가사 자막 합성", progress_cb, step, total_steps)
-    return out_path
+    if effect == "pan":
+        sign = 1 if idx % 2 == 0 else -1
+        step = max(1, int(w * 0.1 / frames))
+        return f"{scale}zoompan=z='1.12':x='max(0,min(iw-iw/zoom,x+{sign*step}))':y='ih/2-(ih/zoom/2)'{tail}"
+    elif effect == "tilt":
+        sign = 1 if idx % 2 == 0 else -1
+        step = max(1, int(h * 0.1 / frames))
+        return f"{scale}zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='max(0,min(ih-ih/zoom,y+{sign*step}))'{tail}"
+    elif effect == "zoom_in":
+        zi = zoom * 2 / frames
+        return f"{scale}zoompan=z='min(zoom+{zi:.6f},{1+zoom*2})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'{tail}"
+    elif effect == "zoom_out":
+        zd = zoom * 2 / frames
+        return f"{scale}zoompan=z='if(eq(on,1),{1+zoom*2},max(zoom-{zd:.6f},1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'{tail}"
+    elif effect == "shake":
+        return f"{scale}zoompan=z='1.06':x='iw/2-(iw/zoom/2)+sin(on*0.9)*12':y='ih/2-(ih/zoom/2)+cos(on*1.3)*8'{tail}"
+    else:  # ken_burns
+        z_end = 1.0 + zoom
+        z_expr = (f"'min(zoom+{zoom/frames:.6f},{z_end})'"
+                  if idx % 2 == 0 else f"'max(zoom-{zoom/frames:.6f},1.0)'")
+        return f"{scale}zoompan=z={z_expr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'{tail}"
+
+
+def make_clip(img: Path, idx: int, out: Path, cfg: dict, total: int) -> Path:
+    w, h   = cfg["width"], cfg["height"]
+    fps    = cfg["fps"]
+    dur    = cfg["photo_duration"]
+    zoom   = cfg["zoom_ratio"]
+    trans  = cfg["transition"]
+    effect = cfg["effect"]
+
+    fade_f  = max(1, int(trans * fps / 2))
+    total_f = int(dur * fps)
+    fade_out_start = total_f - fade_f
+
+    motion = _motion_filter(effect, idx, w, h, dur, fps, zoom)
+    fade   = (f"fade=t=in:st=0:nb_frames={fade_f},"
+              f"fade=t=out:st={fade_out_start}:nb_frames={fade_f}")
+    vf = (f"format=yuv420p,"
+          f"scale='if(gt(iw/ih,{w}/{h}),{w},-2)':'if(gt(iw/ih,{w}/{h}),-2,{h})',"
+          f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,"
+          f"{motion},{fade}")
+
+    run_cmd(["ffmpeg", "-y", "-loop", "1", "-i", str(img),
+             "-vf", vf, "-t", str(dur), "-r", str(fps), "-an",
+             "-c:v", "libx264", "-preset", "fast", "-crf", str(cfg["crf"]),
+             str(out)],
+            f"클립 {idx+1}/{total}")
+    return out
 
 
 # ─── 메인 파이프라인 ──────────────────────────────────────────────────────────
+def main():
+    print("[MV] 뮤직비디오 제작 시작")
 
-def build_music_video(images: list, audio: str,
-                      lrc_text: str, output: str,
-                      cfg: dict, progress_cb=None) -> dict:
-    """
-    뮤직비디오형 쇼츠 제작 메인 파이프라인
+    # 이미지 파일 목록
+    img_env = _e("MV_IMAGES", "")
+    if img_env:
+        img_paths = [CWD / n.strip() for n in img_env.split(",") if n.strip()]
+    else:
+        img_paths = []
+        for i in range(1, 7):
+            for ext in (".jpg", ".jpeg", ".png", ".webp"):
+                p = CWD / f"mv_image{i}{ext}"
+                if p.exists():
+                    img_paths.append(p)
+                    break
 
-    Args:
-        images:   뉴스 사진 경로 목록 (최대 6장)
-        audio:    수노 음악 MP3 경로 (필수)
-        lrc_text: LRC 형식 가사 텍스트 (선택)
-        output:   출력 MP4 경로
-        cfg:      설정 딕셔너리
-        progress_cb: 진행 콜백 (step, total, msg)
-    """
-    check_ffmpeg()
+    img_paths = [p for p in img_paths if p.exists()]
+    if not img_paths:
+        print("[ERROR] 이미지 파일을 찾을 수 없습니다. (mv_image1.jpg, ...)")
+        sys.exit(1)
+    print(f"  이미지 {len(img_paths)}장 확인")
 
-    # 설정값 병합
-    full_cfg = {**MV_DEFAULTS, **cfg}
+    # 음악 파일
+    music_path = CWD / "music.mp3"
+    if not music_path.exists():
+        print("[ERROR] music.mp3를 찾을 수 없습니다.")
+        sys.exit(1)
 
-    img_paths  = [check_file(img, f"이미지 {i + 1}") for i, img in enumerate(images[:6])]
-    audio_path = check_file(audio, "음악")
-    out_path   = Path(output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # LRC 가사
+    lrc_path = CWD / "lyrics.lrc"
+    lrc_text = lrc_path.read_text(encoding="utf-8") if lrc_path.exists() else ""
 
+    # 오디오 길이 → 사진 표시 시간 자동 계산
+    audio_dur = get_duration(music_path)
     n = len(img_paths)
+    CFG["photo_duration"] = round(audio_dur / n + 1.0, 3)
+    print(f"  음악 {audio_dur:.1f}초 → 사진당 {CFG['photo_duration']:.1f}초")
 
-    # ── 오디오 길이 → 사진 표시 시간 자동 계산 ─────────────────────────────
-    audio_duration = get_media_duration(audio_path)
-    full_cfg["photo_duration"] = round(audio_duration / n + 1.0, 3)
-    full_cfg["_audio_duration"] = audio_duration
-    full_cfg["_total"] = n
-
-    if progress_cb:
-        progress_cb(0, 1,
-            f"음악 {audio_duration:.1f}초 → "
-            f"사진당 {full_cfg['photo_duration']:.1f}초")
-
-    # ── LRC 파싱 ───────────────────────────────────────────────────────────
+    # LRC 파싱
     lrc_cues = []
-    if lrc_text and lrc_text.strip():
+    if lrc_text.strip():
         lrc_cues = parse_lrc(lrc_text)
-        lrc_cues = _add_end_times(lrc_cues, int(audio_duration * 1000))
-        if progress_cb:
-            progress_cb(0, 1, f"LRC 가사 {len(lrc_cues)}줄 파싱 완료")
-
-    has_lyrics = bool(lrc_cues)
-    total_steps = n + 1 + 1 + (1 if has_lyrics else 0) + 1
-    # (clips + concat + audio + lyrics + final)
+        lrc_cues = add_end_times(lrc_cues, int(audio_dur * 1000))
+        print(f"  LRC 가사 {len(lrc_cues)}줄 파싱")
 
     with tempfile.TemporaryDirectory(prefix="mv_") as tmpdir:
         tmp = Path(tmpdir)
 
-        # ── 사진 클립 생성 ──────────────────────────────────────────────
-        clip_paths = []
+        # 클립 생성
+        clips = []
         for i, img in enumerate(img_paths):
             clip = tmp / f"clip_{i:02d}.mp4"
-            make_clip(img, i, clip, full_cfg, progress_cb, i, total_steps)
-            clip_paths.append(clip)
+            make_clip(img, i, clip, CFG, n)
+            clips.append(clip)
 
-        step = n
-
-        # ── 클립 연결 ──────────────────────────────────────────────────
+        # 클립 연결
+        list_f = tmp / "list.txt"
+        list_f.write_text(
+            "\n".join(f"file '{str(c.resolve()).replace(chr(92), '/')}'"
+                      for c in clips),
+            encoding="utf-8"
+        )
         merged = tmp / "merged.mp4"
-        concat_clips(clip_paths, merged, progress_cb, step, total_steps)
-        current = merged
-        step += 1
+        run_cmd(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                 "-i", str(list_f), "-c", "copy", str(merged)], "클립 연결")
 
-        # ── 음악 합성 (노멀라이즈 없이) ────────────────────────────────
+        # 음악 합성 (노멀라이즈 없음)
         with_audio = tmp / "with_audio.mp4"
-        merge_audio(merged, audio_path, with_audio,
-                    normalize=full_cfg["audio_norm"],
-                    audio_duration=audio_duration,
-                    progress_cb=progress_cb, step=step, total_steps=total_steps)
+        run_cmd(["ffmpeg", "-y",
+                 "-i", str(merged), "-i", str(music_path),
+                 "-filter_complex", "[1:a]anull[a]",
+                 "-map", "0:v", "-map", "[a]",
+                 "-shortest", "-c:v", "copy",
+                 "-c:a", "aac", "-b:a", "192k",
+                 str(with_audio)], "음악 합성")
         current = with_audio
-        step += 1
 
-        # ── 가사 자막 합성 ──────────────────────────────────────────────
-        if has_lyrics:
-            ass_content = make_lyric_ass(
-                lrc_cues, full_cfg["width"], full_cfg["height"], full_cfg
-            )
+        # 가사 자막 합성
+        if lrc_cues:
+            ass_content = make_lyric_ass(lrc_cues, CFG)
             ass_path = tmp / "lyrics.ass"
             ass_path.write_text(ass_content, encoding="utf-8")
-
-            with_sub = tmp / "with_lyrics.mp4"
-            _burn_ass(current, ass_path, with_sub,
-                      full_cfg["crf"], progress_cb, step, total_steps)
+            sub_str = str(ass_path).replace("\\", "/").replace(":", "\\:")
+            with_sub = tmp / "with_sub.mp4"
+            run_cmd(["ffmpeg", "-y", "-i", str(current),
+                     "-vf", f"ass='{sub_str}'",
+                     "-c:v", "libx264", "-preset", "fast",
+                     "-crf", str(CFG["crf"]), "-c:a", "copy",
+                     str(with_sub)], "가사 자막 합성")
             current = with_sub
-            step += 1
 
-        # ── 최종 인코딩 (정확한 길이 트림) ─────────────────────────────
-        if progress_cb:
-            progress_cb(step, total_steps, "최종 인코딩 중...")
+        # 최종 인코딩
+        run_cmd(["ffmpeg", "-y", "-i", str(current),
+                 "-t", f"{audio_dur:.3f}",
+                 "-c:v", "libx264", "-preset", "slow",
+                 "-crf", str(CFG["crf"]),
+                 "-profile:v", "high", "-level", "4.0",
+                 "-movflags", "+faststart",
+                 "-c:a", "aac", "-b:a", "192k",
+                 "-ar", "44100", "-pix_fmt", "yuv420p",
+                 OUTPUT], "최종 인코딩")
 
-        cmd_final = [
-            "ffmpeg", "-y", "-i", str(current),
-            "-t", f"{audio_duration:.3f}",
-            "-c:v", "libx264", "-preset", "slow",
-            "-crf", str(full_cfg["crf"]),
-            "-profile:v", "high", "-level", "4.0",
-            "-movflags", "+faststart",
-            "-c:a", "aac", "-b:a", "192k",
-            "-ar", "44100", "-pix_fmt", "yuv420p",
-            str(out_path),
-        ]
-        run(cmd_final, f"최종 출력 ({audio_duration:.1f}초)")
+    size_mb = Path(OUTPUT).stat().st_size / 1024 / 1024
+    print(f"[MV] 완료: {OUTPUT} ({size_mb:.1f}MB · {audio_dur:.1f}초)")
 
-    size_mb = out_path.stat().st_size / 1024 / 1024
 
-    if progress_cb:
-        progress_cb(total_steps, total_steps,
-                    f"뮤직비디오 완료! ({size_mb:.1f}MB · {audio_duration:.1f}초)")
-
-    return {
-        "size_mb": round(size_mb, 1),
-        "duration_sec": round(audio_duration, 1),
-        "output": str(out_path),
-        "lyric_count": len(lrc_cues),
-    }
+if __name__ == "__main__":
+    main()
