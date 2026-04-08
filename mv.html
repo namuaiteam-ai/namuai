@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>뮤직비디오 뉴스 쇼츠</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f0f13;
+  color: #e8e8e8;
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 1px solid #2a2a3e;
+  padding: 20px 24px 16px;
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 16px;
+}
+.header-icon { font-size: 28px; }
+.header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+.header p  { font-size: 12px; color: #888; margin-top: 3px; }
+.back-btn {
+  margin-left: auto;
+  font-size: 12px; padding: 6px 14px;
+  border: 1px solid #333; border-radius: 20px;
+  background: transparent; color: #aaa; cursor: pointer;
+  text-decoration: none;
+}
+.back-btn:hover { border-color: #666; color: #fff; }
+
+.main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+
+.card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 13px; font-weight: 700; color: #9d9dff;
+  letter-spacing: 0.3px; margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #2a2a3e;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title span { font-size: 16px; }
+
+/* 서브탭 */
+.sub-tabs {
+  display: flex; gap: 3px; margin-bottom: 14px;
+  background: #0f0f18; border-radius: 8px; padding: 3px;
+}
+.sub-tab {
+  flex: 1; padding: 8px; border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  background: transparent; color: #666; transition: all .15s;
+}
+.sub-tab.active { background: #2a2a4e; color: #9d9dff; }
+
+/* 텍스트에어리어 */
+textarea {
+  width: 100%; background: #0f0f18; border: 1px solid #2a2a3e;
+  border-radius: 8px; padding: 12px; color: #e8e8e8;
+  font-size: 13px; line-height: 1.7; resize: vertical;
+  font-family: inherit; outline: none;
+}
+textarea:focus { border-color: #5555cc; }
+textarea.mono { font-family: "Consolas", "Courier New", monospace; font-size: 12px; }
+
+/* 업로드 카드 */
+.upload-area {
+  background: #0f0f18; border: 1.5px dashed #2a2a3e;
+  border-radius: 10px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px;
+  cursor: pointer; position: relative;
+  transition: border-color .18s;
+  margin-bottom: 10px;
+}
+.upload-area:hover { border-color: #5555cc; }
+.upload-area.filled { border-color: #5555cc; border-style: solid; background: #1a1a3e; }
+.upload-area input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.upload-icon {
+  width: 38px; height: 38px; border-radius: 8px;
+  background: #2a2a3e; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; font-size: 18px;
+}
+.upload-info strong { font-size: 14px; font-weight: 600; display: block; color: #ddd; }
+.upload-info span   { font-size: 11px; color: #666; margin-top: 2px; display: block; }
+.upload-info .fname { font-size: 11px; color: #9d9dff; margin-top: 3px; }
+.badge {
+  font-size: 11px; background: #5555cc; color: #fff;
+  padding: 2px 8px; border-radius: 20px; margin-left: 6px;
+}
+
+/* 이미지 미리보기 */
+.img-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.img-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid #2a2a3e; }
+.img-del { position: relative; display: inline-block; }
+.img-del button {
+  position: absolute; top: -4px; right: -4px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #cc3333; color: #fff; border: none;
+  font-size: 10px; cursor: pointer; line-height: 18px; text-align: center; padding: 0;
+}
+
+/* 길이 빠른선택 */
+.dur-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.dur-row label { font-size: 12px; color: #666; flex-shrink: 0; }
+.dur-btn {
+  padding: 5px 12px; border: 1.5px solid #2a2a3e;
+  border-radius: 6px; font-size: 12px; font-weight: 500;
+  cursor: pointer; background: #0f0f18; color: #888;
+  transition: all .15s;
+}
+.dur-btn.active { border-color: #5555cc; background: #2a2a4e; color: #9d9dff; }
+.dur-btn:hover  { border-color: #444; }
+input[type=number] {
+  width: 60px; background: #0f0f18; border: 1px solid #2a2a3e;
+  border-radius: 6px; padding: 5px 8px; color: #e8e8e8; font-size: 13px;
+}
+
+/* LRC 헤더 (편집기) */
+.lrc-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.lrc-header span { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; }
+.btn-copy {
+  font-size: 11px; padding: 4px 10px;
+  border: 1px solid #2a2a3e; border-radius: 6px;
+  background: #0f0f18; cursor: pointer; color: #888; transition: all .15s;
+}
+.btn-copy:hover { border-color: #5555cc; color: #9d9dff; }
+
+/* 설정 그리드 */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.settings-card {
+  background: #0f0f18; border: 1px solid #2a2a3e;
+  border-radius: 10px; padding: 14px;
+}
+.settings-card label { font-size: 12px; color: #666; display: block; margin-bottom: 8px; }
+select {
+  width: 100%; background: #0f0f18; border: 1px solid #2a2a3e;
+  border-radius: 6px; padding: 8px 10px; color: #ddd;
+  font-size: 13px; outline: none; cursor: pointer;
+}
+.slider-row { display: flex; align-items: center; gap: 10px; }
+input[type=range] {
+  flex: 1; -webkit-appearance: none; height: 4px;
+  background: #2a2a3e; border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: #9d9dff; cursor: pointer;
+}
+.slider-val { font-size: 13px; font-weight: 600; min-width: 32px; text-align: right; color: #9d9dff; }
+
+/* 효과 버튼 */
+.effect-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.effect-btn {
+  background: #0f0f18; border: 1.5px solid #2a2a3e;
+  border-radius: 10px; padding: 12px 8px;
+  cursor: pointer; text-align: center;
+  transition: all .15s;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.effect-btn:hover  { border-color: #444; }
+.effect-btn.active { border-color: #5555cc; background: #1a1a3e; }
+.effect-btn .icon  { font-size: 18px; }
+.effect-btn .label { font-size: 11px; font-weight: 500; color: #888; }
+.effect-btn.active .label { color: #9d9dff; }
+
+/* 글로우 스와치 */
+.glow-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.swatch {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 2px solid transparent; cursor: pointer; transition: transform .1s;
+}
+.swatch:hover { transform: scale(1.2); }
+.swatch.active { border-color: #fff; transform: scale(1.2); }
+
+/* 생성 버튼 */
+.btn-gen {
+  width: 100%; padding: 16px;
+  background: linear-gradient(135deg, #5555cc 0%, #7755ee 100%);
+  color: #fff; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s; margin-top: 16px;
+}
+.btn-gen:hover:not(:disabled) { opacity: .85; }
+.btn-gen:disabled { opacity: .45; cursor: not-allowed; }
+.btn-conv {
+  padding: 10px 18px; margin-top: 10px;
+  background: #2a2a4e; color: #9d9dff;
+  border: 1px solid #5555cc; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all .15s; display: block; width: 100%;
+}
+.btn-conv:hover:not(:disabled) { background: #3a3a6e; }
+.btn-conv:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 진행/결과 */
+.progress-wrap { margin-top: 14px; display: none; }
+.progress-bg { background: #2a2a3e; border-radius: 6px; height: 8px; overflow: hidden; }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5555cc, #9d9dff);
+  border-radius: 6px; transition: width .4s ease; width: 0%;
+}
+.progress-msg { font-size: 12px; color: #666; margin-top: 8px; text-align: center; }
+.error-msg {
+  background: #2e1111; border: 1px solid #cc3333;
+  border-radius: 10px; padding: 12px 14px;
+  font-size: 13px; color: #ff6666; margin-top: 12px; display: none;
+}
+.result-wrap {
+  margin-top: 16px; display: none;
+  background: #0e2a1e; border: 1px solid #2a5a3a;
+  border-radius: 12px; padding: 20px; text-align: center;
+}
+.result-wrap h3 { font-size: 16px; color: #5aff9d; margin-bottom: 8px; }
+.result-wrap p  { font-size: 13px; color: #888; margin-bottom: 16px; }
+.btn-dl {
+  display: inline-block; padding: 12px 32px;
+  background: linear-gradient(135deg, #2a8a5a, #3aaa7a);
+  color: #fff; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  text-decoration: none; transition: opacity .15s;
+}
+.btn-dl:hover { opacity: .85; }
+.btn-reset {
+  display: inline-block; padding: 12px 20px;
+  background: #1a2a1e; color: #5aff9d;
+  border: 1px solid #2a5a3a; border-radius: 10px;
+  font-size: 13px; cursor: pointer; margin-left: 10px;
+}
+.video-preview {
+  max-width: 200px; margin: 0 auto 16px;
+  border-radius: 10px; overflow: hidden;
+  border: 1px solid #2a5a3a;
+}
+video { width: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">🎬</div>
+  <div>
+    <h1>뮤직비디오 뉴스 쇼츠</h1>
+    <p>수노 음악 + 가사 + 뉴스 사진 → YouTube Shorts (720×1280)</p>
+  </div>
+  <a href="/" class="back-btn">← 돌아가기</a>
+</div>
+
+<div class="main">
+
+  <!-- 1단계: 가사 -->
+  <div class="card">
+    <div class="card-title"><span>📝</span> 1단계 — 가사 입력</div>
+
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-tab="direct">직접 입력</button>
+      <button class="sub-tab" data-tab="lrcfile">LRC 파일 업로드</button>
+    </div>
+
+    <!-- 직접 입력 -->
+    <div id="tab-direct">
+      <textarea id="lyricsRaw" rows="8"
+        placeholder="가사를 한 줄씩 입력하세요.&#10;[버스], [코러스] 같은 태그는 자동 제외됩니다.&#10;&#10;예)&#10;오늘의 뉴스 전해드립니다&#10;세상이 이렇게 돌아가고 있어&#10;함께 들어봐요 우리의 이야기"></textarea>
+
+      <div class="dur-row">
+        <label>총 길이</label>
+        <button class="dur-btn active" data-sec="30">30초</button>
+        <button class="dur-btn" data-sec="45">45초</button>
+        <button class="dur-btn active2" data-sec="60">60초</button>
+        <button class="dur-btn" data-sec="90">90초</button>
+        <button class="dur-btn" data-sec="120">120초</button>
+        <input type="number" id="convDur" value="60" min="10" max="300">
+        <span style="font-size:12px;color:#555">초</span>
+      </div>
+
+      <button class="btn-conv" id="btnConv">LRC 자동 변환 →</button>
+      <div class="error-msg" id="convErr"></div>
+    </div>
+
+    <!-- LRC 파일 업로드 -->
+    <div id="tab-lrcfile" style="display:none">
+      <div class="upload-area" id="lrcCard">
+        <input type="file" id="lrcInput" accept=".lrc,.txt">
+        <div class="upload-icon">📄</div>
+        <div class="upload-info">
+          <strong>LRC 파일 선택</strong>
+          <span>.lrc · .txt — [mm:ss.cc]가사 형식</span>
+          <div class="fname" id="lrcName"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LRC 편집기 (공통) -->
+    <div style="margin-top:14px">
+      <div class="lrc-header">
+        <span>LRC 타임코드 편집기</span>
+        <button class="btn-copy" id="btnCopyLrc">복사</button>
+      </div>
+      <textarea class="mono" id="lrcEditor" rows="10"
+        placeholder="[00:00.00]첫 번째 가사&#10;[00:04.00]두 번째 가사&#10;[00:08.00]세 번째 가사&#10;&#10;(가사 없이 생성 시 자막 없이 뮤직비디오 제작됩니다)"></textarea>
+    </div>
+  </div>
+
+  <!-- 2단계: 파일 업로드 -->
+  <div class="card">
+    <div class="card-title"><span>📁</span> 2단계 — 파일 업로드</div>
+
+    <!-- 사진 -->
+    <div class="upload-area" id="imgCard">
+      <input type="file" id="imgInput" accept=".jpg,.jpeg,.png,.webp" multiple>
+      <div class="upload-icon">🖼</div>
+      <div class="upload-info">
+        <strong>뉴스 사진 <span style="font-size:11px;color:#555;font-weight:400">(최대 6장)</span></strong>
+        <span>JPG · PNG · WEBP</span>
+        <div class="fname" id="imgName"></div>
+      </div>
+    </div>
+    <div class="img-grid" id="imgGrid"></div>
+
+    <!-- 수노 음악 -->
+    <div class="upload-area" id="musicCard">
+      <input type="file" id="musicInput" accept=".mp3,.wav,.m4a,.aac">
+      <div class="upload-icon">🎵</div>
+      <div class="upload-info">
+        <strong>수노 음악 <span id="musicBadge" class="badge" style="display:none"></span></strong>
+        <span>MP3 · WAV · M4A — suno.com에서 생성 후 다운로드</span>
+        <div class="fname" id="musicName"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3단계: 스타일 & 생성 -->
+  <div class="card">
+    <div class="card-title"><span>🎨</span> 3단계 — 스타일 설정 &amp; 생성</div>
+
+    <div class="settings-grid">
+      <div class="settings-card">
+        <label>해상도</label>
+        <select id="resolution">
+          <option value="720x1280" selected>720×1280 (표준)</option>
+          <option value="1080x1920">1080×1920 (고화질)</option>
+        </select>
+      </div>
+      <div class="settings-card">
+        <label>전환 효과 길이</label>
+        <div class="slider-row">
+          <input type="range" id="transition" min="0.1" max="1.5" step="0.1" value="0.5">
+          <span class="slider-val" id="transVal">0.5초</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 사진 효과 -->
+    <div style="font-size:12px;color:#666;margin-bottom:8px">사진 움직임 효과</div>
+    <div class="effect-grid" id="effectGrid">
+      <button class="effect-btn active" data-effect="ken_burns">
+        <span class="icon">🔍</span><span class="label">Ken Burns</span>
+      </button>
+      <button class="effect-btn" data-effect="pan">
+        <span class="icon">↔</span><span class="label">Pan</span>
+      </button>
+      <button class="effect-btn" data-effect="zoom_in">
+        <span class="icon">⊕</span><span class="label">Zoom In</span>
+      </button>
+      <button class="effect-btn" data-effect="zoom_out">
+        <span class="icon">⊖</span><span class="label">Zoom Out</span>
+      </button>
+      <button class="effect-btn" data-effect="tilt">
+        <span class="icon">↕</span><span class="label">Tilt</span>
+      </button>
+      <button class="effect-btn" data-effect="shake">
+        <span class="icon">〰</span><span class="label">Shake</span>
+      </button>
+    </div>
+
+    <!-- 가사 스타일 -->
+    <div style="font-size:12px;color:#666;margin:12px 0 8px">가사 폰트 &amp; 크기</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="lyricFont" style="flex:1;min-width:120px">
+        <option value="NanumGothic" selected>나눔고딕</option>
+        <option value="Malgun Gothic">맑은 고딕</option>
+        <option value="Arial">Arial</option>
+        <option value="NanumBarunGothic">나눔바른고딕</option>
+      </select>
+      <div class="slider-row" style="flex:1;min-width:100px">
+        <input type="range" id="lyricSize" min="24" max="52" value="36">
+        <span class="slider-val" id="sizeVal">36</span>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:#666;margin:14px 0 8px">글로우 색상</div>
+    <div class="glow-row" id="glowPicker">
+      <div class="swatch active" data-glow="&H00B469FF" style="background:#FF69B4" title="핑크"></div>
+      <div class="swatch" data-glow="&H0000D7FF" style="background:#FFD700" title="골드"></div>
+      <div class="swatch" data-glow="&H00E16941" style="background:#4169E1" title="블루"></div>
+      <div class="swatch" data-glow="&H000000FF" style="background:#FF0000" title="레드"></div>
+      <div class="swatch" data-glow="&H00008CFF" style="background:#FF8C00" title="오렌지"></div>
+      <div class="swatch" data-glow="&H00FFFF00" style="background:#00FFFF" title="시안"></div>
+      <div class="swatch" data-glow="&H0000FF00" style="background:#00FF00" title="그린"></div>
+      <div class="swatch" data-glow="&H00FFFFFF" style="background:#fff;border:1px solid #444" title="화이트"></div>
+    </div>
+
+    <button class="btn-gen" id="btnGen">뮤직비디오 생성 시작</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bg">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-msg" id="progressMsg">처리 중...</div>
+    </div>
+
+    <div class="error-msg" id="genErr"></div>
+
+    <div class="result-wrap" id="resultWrap">
+      <h3>✅ 뮤직비디오 완성!</h3>
+      <p id="resultInfo"></p>
+      <div class="video-preview" id="videoPreview"></div>
+      <a class="btn-dl" id="btnDl" href="#" download="mv_output.mp4">다운로드</a>
+      <button class="btn-reset" id="btnReset">새로 만들기</button>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── 서브탭 ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.sub-tab').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-direct').style.display  = (this.dataset.tab === 'direct')  ? 'block' : 'none';
+    document.getElementById('tab-lrcfile').style.display = (this.dataset.tab === 'lrcfile') ? 'block' : 'none';
+  });
+});
+
+// ── 길이 빠른선택 ─────────────────────────────────────────────────────────
+let convDur = 60;
+document.querySelectorAll('.dur-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    convDur = parseInt(this.dataset.sec);
+    document.getElementById('convDur').value = convDur;
+  });
+});
+document.getElementById('convDur').addEventListener('input', function() {
+  convDur = parseInt(this.value) || 60;
+  document.querySelectorAll('.dur-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.sec) === convDur);
+  });
+});
+
+// ── LRC 자동 변환 ────────────────────────────────────────────────────────
+document.getElementById('btnConv').addEventListener('click', async function() {
+  const lyrics = document.getElementById('lyricsRaw').value.trim();
+  if (!lyrics) { showErr('convErr', '가사를 입력해주세요.'); return; }
+  hideErr('convErr');
+  this.disabled = true; this.textContent = '변환 중...';
+  try {
+    const res = await fetch('/convert_lrc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lyrics, duration: convDur, title: '뮤직비디오 뉴스' }),
+    });
+    const d = await res.json();
+    if (d.error) { showErr('convErr', d.error); return; }
+    document.getElementById('lrcEditor').value = d.lrc;
+    document.getElementById('lrcEditor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) { showErr('convErr', '오류: ' + e.message); }
+  finally { this.disabled = false; this.textContent = 'LRC 자동 변환 →'; }
+});
+
+// ── LRC 파일 업로드 ──────────────────────────────────────────────────────
+document.getElementById('lrcInput').addEventListener('change', function() {
+  const card = document.getElementById('lrcCard');
+  const name = document.getElementById('lrcName');
+  if (!this.files[0]) return;
+  name.textContent = this.files[0].name;
+  card.classList.add('filled');
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('lrcEditor').value = e.target.result; };
+  reader.readAsText(this.files[0], 'utf-8');
+});
+
+// ── LRC 복사 ──────────────────────────────────────────────────────────────
+document.getElementById('btnCopyLrc').addEventListener('click', function() {
+  const val = document.getElementById('lrcEditor').value;
+  navigator.clipboard.writeText(val).then(() => {
+    const orig = this.textContent;
+    this.textContent = '복사됨!'; this.style.color = '#5aff9d';
+    setTimeout(() => { this.textContent = orig; this.style.color = ''; }, 1500);
+  });
+});
+
+// ── 이미지 파일 ──────────────────────────────────────────────────────────
+const imgFiles = [];
+document.getElementById('imgInput').addEventListener('change', function(e) {
+  Array.from(e.target.files).slice(0, 6 - imgFiles.length).forEach(f => {
+    if (imgFiles.length < 6) imgFiles.push(f);
+  });
+  renderImages(); this.value = '';
+});
+function renderImages() {
+  const grid = document.getElementById('imgGrid');
+  const card = document.getElementById('imgCard');
+  document.getElementById('imgName').textContent = imgFiles.length ? imgFiles.length + '장 선택됨' : '';
+  card.classList.toggle('filled', imgFiles.length > 0);
+  grid.innerHTML = '';
+  imgFiles.forEach((f, i) => {
+    const url = URL.createObjectURL(f);
+    const wrap = document.createElement('div'); wrap.className = 'img-del';
+    wrap.innerHTML = `<img class="img-thumb" src="${url}"><button onclick="rmImg(${i})">✕</button>`;
+    grid.appendChild(wrap);
+  });
+}
+function rmImg(i) { imgFiles.splice(i, 1); renderImages(); }
+
+// ── 음악 파일 ────────────────────────────────────────────────────────────
+document.getElementById('musicInput').addEventListener('change', function() {
+  const card  = document.getElementById('musicCard');
+  const name  = document.getElementById('musicName');
+  const badge = document.getElementById('musicBadge');
+  if (!this.files[0]) return;
+  name.textContent = this.files[0].name;
+  card.classList.add('filled');
+  const a = document.createElement('audio');
+  a.preload = 'metadata';
+  a.onloadedmetadata = () => {
+    badge.textContent = a.duration.toFixed(1) + '초';
+    badge.style.display = 'inline';
+    URL.revokeObjectURL(a.src);
+  };
+  a.src = URL.createObjectURL(this.files[0]);
+});
+
+// ── 슬라이더 ─────────────────────────────────────────────────────────────
+document.getElementById('transition').addEventListener('input', function() {
+  document.getElementById('transVal').textContent = this.value + '초';
+});
+document.getElementById('lyricSize').addEventListener('input', function() {
+  document.getElementById('sizeVal').textContent = this.value;
+});
+
+// ── 효과 버튼 ────────────────────────────────────────────────────────────
+let selectedEffect = 'ken_burns';
+document.getElementById('effectGrid').addEventListener('click', function(e) {
+  const btn = e.target.closest('.effect-btn');
+  if (!btn) return;
+  document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedEffect = btn.dataset.effect;
+});
+
+// ── 글로우 스와치 ────────────────────────────────────────────────────────
+let glowColor = '&H00B469FF';
+document.getElementById('glowPicker').addEventListener('click', function(e) {
+  const sw = e.target.closest('.swatch');
+  if (!sw) return;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+  sw.classList.add('active');
+  glowColor = sw.dataset.glow;
+});
+
+// ── 뮤직비디오 생성 ──────────────────────────────────────────────────────
+document.getElementById('btnGen').addEventListener('click', async function() {
+  if (!imgFiles.length)  { showErr('genErr', '뉴스 사진을 1장 이상 업로드해주세요.'); return; }
+  const music = document.getElementById('musicInput').files[0];
+  if (!music) { showErr('genErr', '수노 음악 파일을 업로드해주세요.'); return; }
+  hideErr('genErr');
+  setUI('loading');
+
+  const form = new FormData();
+  imgFiles.forEach(f => form.append('images', f));
+  form.append('music',       music);
+  form.append('lrc_text',    document.getElementById('lrcEditor').value || '');
+  const [w, h] = document.getElementById('resolution').value.split('x');
+  form.append('width',       w);
+  form.append('height',      h);
+  form.append('transition',  document.getElementById('transition').value);
+  form.append('effect',      selectedEffect);
+  form.append('font',        document.getElementById('lyricFont').value);
+  form.append('lyric_size',  document.getElementById('lyricSize').value);
+  form.append('lyric_glow',  glowColor);
+
+  try {
+    const res  = await fetch('/render_mv', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.status === 'success') {
+      showResult(data);
+    } else {
+      showErr('genErr', data.message || data.log || '오류 발생');
+      setUI('idle');
+    }
+  } catch(e) {
+    showErr('genErr', '서버 연결 오류: ' + e.message);
+    setUI('idle');
+  }
+});
+
+function showResult(data) {
+  setUI('done');
+  document.getElementById('resultInfo').textContent =
+    data.size_mb ? `${data.size_mb}MB · ${data.duration_sec}초` : '';
+  const url = data.video_url;
+  document.getElementById('btnDl').href = url;
+  const vp = document.getElementById('videoPreview');
+  vp.innerHTML = `<video controls playsinline><source src="${url}" type="video/mp4"></video>`;
+}
+
+function setUI(state) {
+  const btn  = document.getElementById('btnGen');
+  const prog = document.getElementById('progressWrap');
+  const res  = document.getElementById('resultWrap');
+  if (state === 'loading') {
+    btn.disabled = true; btn.textContent = '제작 중... (ffmpeg)';
+    prog.style.display = 'block'; res.style.display = 'none';
+    animateProgress();
+  } else if (state === 'done') {
+    btn.disabled = false; btn.textContent = '뮤직비디오 생성 시작';
+    prog.style.display = 'none'; res.style.display = 'block';
+  } else {
+    btn.disabled = false; btn.textContent = '뮤직비디오 생성 시작';
+    prog.style.display = 'none';
+  }
+}
+
+// 제작 중 가짜 진행바 (실제 진행 없이 시각 피드백)
+let progTimer = null;
+function animateProgress() {
+  clearInterval(progTimer);
+  let pct = 0;
+  const msgs = ['이미지 클립 제작 중...', '클립 연결 중...', '음악 합성 중...', '가사 자막 합성 중...', '최종 인코딩 중...'];
+  let mi = 0;
+  progTimer = setInterval(() => {
+    pct = Math.min(pct + (pct < 70 ? 1.5 : 0.3), 95);
+    document.getElementById('progressFill').style.width = pct + '%';
+    if (pct > mi * 20) {
+      document.getElementById('progressMsg').textContent = msgs[Math.min(mi, msgs.length-1)];
+      mi++;
+    }
+  }, 400);
+}
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  clearInterval(progTimer);
+  setUI('idle');
+  document.getElementById('resultWrap').style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+});
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = '⚠️ ' + msg; el.style.display = 'block';
+}
+function hideErr(id) { document.getElementById(id).style.display = 'none'; }
+</script>
+</body>
+</html>

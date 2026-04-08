@@ -14,6 +14,10 @@ os.makedirs(os.path.join(BASE_DIR, 'video'), exist_ok=True)
 def index():
     return send_from_directory(BASE_DIR, 'index.html')
 
+@app.route('/mv')
+def mv_page():
+    return send_from_directory(BASE_DIR, 'mv.html')
+
 @app.route('/video/<path:filename>')
 def serve_video(filename):
     return send_from_directory(os.path.join(BASE_DIR, 'video'), filename)
