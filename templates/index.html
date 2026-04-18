@@ -329,6 +329,27 @@
         <span style="font-size:11px;color:#888;margin-left:8px;">Whisper가 오디오를 분석해 SRT 자막 파일을 자동으로 만듭니다</span>
       </div>
       <div id="autoSubIdle">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+          <div style="flex:1;min-width:110px;">
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">Whisper 모델</div>
+            <select id="whisperModel" style="width:100%;">
+              <option value="tiny">Tiny (빠름)</option>
+              <option value="base" selected>Base (권장)</option>
+              <option value="small">Small (정확)</option>
+              <option value="medium">Medium (고정확)</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:110px;">
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">언어</div>
+            <select id="whisperLang" style="width:100%;">
+              <option value="">자동 감지</option>
+              <option value="ko">한국어</option>
+              <option value="en">영어</option>
+              <option value="ja">일본어</option>
+              <option value="zh">중국어</option>
+            </select>
+          </div>
+        </div>
         <button class="btn-auto-sub" onclick="startTranscribe()">▶ 자막 자동 생성</button>
       </div>
       <div id="autoSubLoading" style="display:none;">
@@ -342,6 +363,7 @@
       </div>
       <div id="autoSubDone" style="display:none;">
         <div class="auto-sub-result-box">✅ 자막 생성 완료 — <span id="autoSubLang"></span></div>
+        <div id="autoSubPreview" style="background:#f8f8f6;border:1px solid #e0e0da;border-radius:8px;padding:8px 12px;font-size:12px;color:#444;line-height:1.7;margin-bottom:10px;max-height:80px;overflow:hidden;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="sub-btn active" onclick="applyAutoSub()">✔ 영상에 적용</button>
           <a class="sub-btn" id="btnDownloadSrt" href="#" download="subtitle.srt">⬇ SRT 다운로드</a>
@@ -781,7 +803,9 @@ function startTranscribe() {
   document.getElementById('autoSubMsg').textContent       = '준비 중...';
 
   const form = new FormData();
-  form.append('audio', audioFile);
+  form.append('audio',    audioFile);
+  form.append('model',    document.getElementById('whisperModel').value);
+  form.append('language', document.getElementById('whisperLang').value);
 
   fetch('/transcribe', { method: 'POST', body: form })
     .then(r => r.json())
@@ -826,6 +850,12 @@ async function loadAutoSubResult(jobId) {
     document.getElementById('autoSubLang').textContent      = lang;
     const blob = new Blob([srt], { type: 'text/plain' });
     document.getElementById('btnDownloadSrt').href = URL.createObjectURL(blob);
+
+    // SRT 미리보기 (첫 3개 항목 텍스트만 표시)
+    const preview = srt.split(/\n{2,}/).slice(0, 3)
+      .map(b => b.trim().split('\n').slice(2).join(' '))
+      .filter(Boolean).join('  /  ');
+    document.getElementById('autoSubPreview').textContent = preview || '(내용 없음)';
 
     // 자막 카드 자동 업데이트
     document.getElementById('subList').textContent = 'AI 생성: subtitle.srt';

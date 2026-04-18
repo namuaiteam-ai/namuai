@@ -207,7 +207,8 @@ def _generate_srt(segments) -> str:
     return "\n".join(lines)
 
 
-def _run_transcribe(job_id: str, audio_path: str):
+def _run_transcribe(job_id: str, audio_path: str,
+                    model_name: str = "base", language: str | None = None):
     def step(pct, msg):
         with JOBS_LOCK:
             JOBS[job_id]["progress"] = pct
@@ -215,11 +216,15 @@ def _run_transcribe(job_id: str, audio_path: str):
             JOBS[job_id]["log"].append({"pct": pct, "msg": msg})
 
     try:
-        step(5,  "Whisper 모델 로딩 중...")
+        step(5, f"Whisper '{model_name}' 모델 로딩 중...")
         import whisper
-        model = whisper.load_model("base")
-        step(20, "오디오 분석 중... (잠시 기다려 주세요)")
-        result = model.transcribe(audio_path)
+        model = whisper.load_model(model_name)
+        lang_hint = f" [{language}]" if language else " [자동 감지]"
+        step(20, f"음성 인식 중{lang_hint}... (파일 길이에 따라 수 분 소요)")
+        kwargs: dict = {}
+        if language:
+            kwargs["language"] = language
+        result = model.transcribe(audio_path, **kwargs)
         step(85, "SRT 파일 변환 중...")
         srt = _generate_srt(result["segments"])
         srt_path = Path(audio_path).parent / "subtitle.srt"
@@ -239,11 +244,18 @@ def _run_transcribe(job_id: str, audio_path: str):
             JOBS[job_id]["message"] = str(e)
 
 
+_ALLOWED_MODELS = {"tiny", "base", "small", "medium"}
+
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
     audio_file = request.files.get("audio")
     if not audio_file or not audio_file.filename:
         return jsonify({"error": "오디오 파일이 없습니다."}), 400
+
+    model_name = request.form.get("model", "base")
+    if model_name not in _ALLOWED_MODELS:
+        model_name = "base"
+    language = request.form.get("language") or None  # "" → None (자동 감지)
 
     job_id  = "tr_" + uuid.uuid4().hex[:8]
     job_dir = UPLOAD_DIR / job_id
@@ -254,7 +266,11 @@ def transcribe():
         JOBS[job_id] = {"status": "queued", "progress": 0, "message": "대기 중...",
                         "output": None, "log": [], "result": None}
 
-    threading.Thread(target=_run_transcribe, args=(job_id, audio_path), daemon=True).start()
+    threading.Thread(
+        target=_run_transcribe,
+        args=(job_id, audio_path, model_name, language),
+        daemon=True,
+    ).start()
     return jsonify({"job_id": job_id})
 
 
