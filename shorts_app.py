@@ -195,6 +195,77 @@ def thumbnail(job_id: str):
     return jsonify({"error": "썸네일 생성 실패"}), 500
 
 
+def _generate_srt(segments) -> str:
+    def fmt(t):
+        h, r = divmod(int(t), 3600)
+        m, s = divmod(r, 60)
+        ms = int((t - int(t)) * 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        lines += [str(i), f"{fmt(seg['start'])} --> {fmt(seg['end'])}", seg["text"].strip(), ""]
+    return "\n".join(lines)
+
+
+def _run_transcribe(job_id: str, audio_path: str):
+    def step(pct, msg):
+        with JOBS_LOCK:
+            JOBS[job_id]["progress"] = pct
+            JOBS[job_id]["message"]  = msg
+            JOBS[job_id]["log"].append({"pct": pct, "msg": msg})
+
+    try:
+        step(5,  "Whisper 모델 로딩 중...")
+        import whisper
+        model = whisper.load_model("base")
+        step(20, "오디오 분석 중... (잠시 기다려 주세요)")
+        result = model.transcribe(audio_path)
+        step(85, "SRT 파일 변환 중...")
+        srt = _generate_srt(result["segments"])
+        srt_path = Path(audio_path).parent / "subtitle.srt"
+        srt_path.write_text(srt, encoding="utf-8")
+        with JOBS_LOCK:
+            JOBS[job_id]["result"]   = {"srt": srt, "language": result.get("language", ""), "job_id": job_id}
+            JOBS[job_id]["status"]   = "done"
+            JOBS[job_id]["progress"] = 100
+            JOBS[job_id]["message"]  = "자막 생성 완료!"
+    except ImportError:
+        with JOBS_LOCK:
+            JOBS[job_id]["status"]  = "error"
+            JOBS[job_id]["message"] = "openai-whisper 미설치 — pip install openai-whisper 실행 후 재시작하세요."
+    except Exception as e:
+        with JOBS_LOCK:
+            JOBS[job_id]["status"]  = "error"
+            JOBS[job_id]["message"] = str(e)
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    audio_file = request.files.get("audio")
+    if not audio_file or not audio_file.filename:
+        return jsonify({"error": "오디오 파일이 없습니다."}), 400
+
+    job_id  = "tr_" + uuid.uuid4().hex[:8]
+    job_dir = UPLOAD_DIR / job_id
+    job_dir.mkdir(parents=True)
+    audio_path = str(save_upload(audio_file, job_dir))
+
+    with JOBS_LOCK:
+        JOBS[job_id] = {"status": "queued", "progress": 0, "message": "대기 중...",
+                        "output": None, "log": [], "result": None}
+
+    threading.Thread(target=_run_transcribe, args=(job_id, audio_path), daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/subtitle/<job_id>")
+def download_subtitle(job_id: str):
+    srt_path = UPLOAD_DIR / job_id / "subtitle.srt"
+    if not srt_path.exists():
+        return jsonify({"error": "파일 없음"}), 404
+    return send_file(srt_path, as_attachment=True, download_name="subtitle.srt")
+
+
 if __name__ == "__main__":
     import webbrowser
     port = int(os.environ.get("PORT", 5000))

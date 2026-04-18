@@ -256,6 +256,26 @@
     margin-left: 10px;
   }
 
+  /* ── AI 자막 자동 생성 ── */
+  .btn-auto-sub {
+    padding: 9px 22px; background: #22c55e; color: #fff;
+    border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .btn-auto-sub:hover { opacity: .85; }
+  .btn-auto-sub:disabled { opacity: .5; cursor: not-allowed; }
+  .spinner-green {
+    width: 18px; height: 18px; flex-shrink: 0;
+    border: 2.5px solid #d1fae5; border-top-color: #22c55e;
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .auto-sub-result-box {
+    font-size: 13px; color: #15803d;
+    background: #f0fdf4; border: 1px solid #bbf7d0;
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+  }
+
   /* ── 에러 ── */
   .error-msg {
     background: #fff0f0; border: 1px solid #ffcdd2;
@@ -298,6 +318,36 @@
       <strong>나레이션 오디오 <span id="audioDurationBadge" class="sync-badge" style="display:none"></span></strong>
       <span>MP3 · WAV · M4A · AAC — 업로드 시 영상 길이가 오디오에 맞춰 자동 설정됩니다</span>
       <div class="upload-filelist" id="audioList"></div>
+    </div>
+  </div>
+
+  <!-- AI 자막 자동 생성 -->
+  <div id="autoSubWrap" style="display:none; margin-bottom:10px;">
+    <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:14px 18px;">
+      <div style="margin-bottom:10px;">
+        <strong style="font-size:14px;">🤖 AI 자막 자동 생성</strong>
+        <span style="font-size:11px;color:#888;margin-left:8px;">Whisper가 오디오를 분석해 SRT 자막 파일을 자동으로 만듭니다</span>
+      </div>
+      <div id="autoSubIdle">
+        <button class="btn-auto-sub" onclick="startTranscribe()">▶ 자막 자동 생성</button>
+      </div>
+      <div id="autoSubLoading" style="display:none;">
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#555;margin-bottom:8px;">
+          <div class="spinner-green"></div>
+          <span id="autoSubMsg">준비 중...</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="autoSubFill" style="background:#22c55e;width:0%"></div>
+        </div>
+      </div>
+      <div id="autoSubDone" style="display:none;">
+        <div class="auto-sub-result-box">✅ 자막 생성 완료 — <span id="autoSubLang"></span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="sub-btn active" onclick="applyAutoSub()">✔ 영상에 적용</button>
+          <a class="sub-btn" id="btnDownloadSrt" href="#" download="subtitle.srt">⬇ SRT 다운로드</a>
+          <button class="sub-btn" onclick="resetAutoSub()">↺ 다시 생성</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -537,6 +587,10 @@ renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
       audioDuration = null;
       updateSyncUI();
     }
+    if (id === 'audio') {
+      document.getElementById('autoSubWrap').style.display = this.files[0] ? 'block' : 'none';
+      if (!this.files[0]) { generatedSubtitleFile = null; resetAutoSub(); }
+    }
   });
 });
 
@@ -599,7 +653,7 @@ async function startGenerate() {
 
   // 오디오 / 자막
   const audioFile = document.getElementById('audioInput').files[0];
-  const subFile   = document.getElementById('subInput').files[0];
+  const subFile   = document.getElementById('subInput').files[0] || generatedSubtitleFile;
   if (audioFile) form.append('audio',    audioFile);
   if (subFile)   form.append('subtitle', subFile);
 
@@ -710,6 +764,85 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('errorMsg').style.display = 'none';
+}
+
+// ── AI 자막 자동 생성 ────────────────────────────────────────────────────────
+let generatedSubtitleFile = null;
+const LANG_NAMES = {ko:'한국어',en:'영어',ja:'일본어',zh:'중국어',fr:'프랑스어',de:'독일어',es:'스페인어'};
+
+function startTranscribe() {
+  const audioFile = document.getElementById('audioInput').files[0];
+  if (!audioFile) { showError('오디오 파일을 먼저 업로드해주세요.'); return; }
+  hideError();
+  document.getElementById('autoSubIdle').style.display    = 'none';
+  document.getElementById('autoSubLoading').style.display = 'block';
+  document.getElementById('autoSubDone').style.display    = 'none';
+  document.getElementById('autoSubFill').style.width      = '0%';
+  document.getElementById('autoSubMsg').textContent       = '준비 중...';
+
+  const form = new FormData();
+  form.append('audio', audioFile);
+
+  fetch('/transcribe', { method: 'POST', body: form })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { resetAutoSub(); showError(data.error); return; }
+      listenAutoSubProgress(data.job_id);
+    })
+    .catch(e => { resetAutoSub(); showError('서버 오류: ' + e.message); });
+}
+
+function listenAutoSubProgress(jobId) {
+  const es = new EventSource(`/progress/${jobId}`);
+  es.onmessage = function(e) {
+    const d = JSON.parse(e.data);
+    document.getElementById('autoSubMsg').textContent  = d.msg || '';
+    document.getElementById('autoSubFill').style.width = (d.pct || 0) + '%';
+    if (d.status === 'done')        { es.close(); loadAutoSubResult(jobId); }
+    else if (d.status === 'error')  { es.close(); resetAutoSub(); showError(d.msg); }
+  };
+  es.onerror = function() { es.close(); setTimeout(() => pollAutoSub(jobId), 1200); };
+}
+
+async function pollAutoSub(jobId) {
+  try {
+    const d = await (await fetch(`/status/${jobId}`)).json();
+    if (d.status === 'done')       loadAutoSubResult(jobId);
+    else if (d.status === 'error') { resetAutoSub(); showError(d.message); }
+    else setTimeout(() => pollAutoSub(jobId), 1500);
+  } catch { setTimeout(() => pollAutoSub(jobId), 2000); }
+}
+
+async function loadAutoSubResult(jobId) {
+  try {
+    const d = await (await fetch(`/status/${jobId}`)).json();
+    if (!d.result || !d.result.srt) { resetAutoSub(); showError('자막 결과를 불러오지 못했습니다.'); return; }
+    const srt  = d.result.srt;
+    const lang = LANG_NAMES[d.result.language] || d.result.language || '언어 감지됨';
+    generatedSubtitleFile = new File([srt], 'subtitle.srt', { type: 'text/plain' });
+
+    document.getElementById('autoSubLoading').style.display = 'none';
+    document.getElementById('autoSubDone').style.display    = 'block';
+    document.getElementById('autoSubLang').textContent      = lang;
+    const blob = new Blob([srt], { type: 'text/plain' });
+    document.getElementById('btnDownloadSrt').href = URL.createObjectURL(blob);
+
+    // 자막 카드 자동 업데이트
+    document.getElementById('subList').textContent = 'AI 생성: subtitle.srt';
+    document.getElementById('subCard').classList.add('filled');
+  } catch(e) { resetAutoSub(); showError('결과 오류: ' + e.message); }
+}
+
+function applyAutoSub() {
+  if (!generatedSubtitleFile) return;
+  document.getElementById('subList').textContent = 'AI 생성: subtitle.srt';
+  document.getElementById('subCard').classList.add('filled');
+}
+
+function resetAutoSub() {
+  document.getElementById('autoSubLoading').style.display = 'none';
+  document.getElementById('autoSubDone').style.display    = 'none';
+  document.getElementById('autoSubIdle').style.display    = 'block';
 }
 
 document.getElementById('btnReset').addEventListener('click', function() {
