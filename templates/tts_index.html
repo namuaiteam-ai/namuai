@@ -54,6 +54,16 @@
     background: #fff0f0; border: 1px solid #ffcdd2; border-radius: 10px;
     padding: 12px 14px; font-size: 13px; color: #c62828; margin-top: 14px; display: none;
   }
+  .card h2 {
+    font-size: 13px; font-weight: 700; margin-bottom: 10px; color: #333;
+  }
+  .card .hint { font-size: 11px; color: #999; margin-top: 6px; line-height: 1.5; }
+  .btn-secondary {
+    width: 100%; padding: 12px; margin-top: 10px;
+    background: #fff; color: #1a1a1a; border: 1.5px solid #1a1a1a; border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -64,6 +74,15 @@
 </div>
 
 <div class="main">
+  <div class="card">
+    <h2>뉴스 기사 → AI로 후킹력 있는 대본 재작성 (선택)</h2>
+    <textarea id="article" rows="5" placeholder="일반 뉴스 기사 원문을 붙여넣으세요..."></textarea>
+    <button class="btn-secondary" id="btnRewrite">AI로 재작성</button>
+    <div class="error-msg" id="rewriteErrorMsg"></div>
+    <div class="hint">Claude API를 사용합니다 (Anthropic API 키 필요, 유료). 사실관계는 유지하고 문체만 다듬습니다.
+      재작성 결과는 아래 대본 입력창에 자동으로 채워집니다.</div>
+  </div>
+
   <div class="card">
     <textarea id="text" rows="6" placeholder="나레이션 대본을 입력하세요...&#10;줄바꿈으로 자막 한 줄씩 구분됩니다."></textarea>
     <div class="checkbox-row">
@@ -105,6 +124,43 @@
 </div>
 
 <script>
+const btnRewrite = document.getElementById('btnRewrite');
+btnRewrite.addEventListener('click', async () => {
+  const article = document.getElementById('article').value.trim();
+  const errorEl = document.getElementById('rewriteErrorMsg');
+  errorEl.style.display = 'none';
+
+  if (!article) {
+    errorEl.textContent = '기사 내용을 입력해주세요.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btnRewrite.disabled = true;
+  btnRewrite.textContent = '재작성 중...';
+
+  try {
+    const res = await fetch('/rewrite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      errorEl.textContent = data.error;
+      errorEl.style.display = 'block';
+    } else {
+      document.getElementById('text').value = data.rewritten;
+    }
+  } catch (e) {
+    errorEl.textContent = '서버 연결 오류: ' + e.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btnRewrite.disabled = false;
+    btnRewrite.textContent = 'AI로 재작성';
+  }
+});
+
 const btn = document.getElementById('btnGenerate');
 btn.addEventListener('click', async () => {
   const text = document.getElementById('text').value.trim();

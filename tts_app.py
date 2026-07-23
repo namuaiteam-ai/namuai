@@ -11,6 +11,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
 
+import article_rewriter
 import tts_supertonic
 
 app = Flask(__name__)
@@ -58,6 +59,32 @@ def generate():
         return jsonify({"error": f"음성 생성 실패: {e}"}), 400
 
     return jsonify({"file_id": file_id, "has_subtitle": with_subtitle and srt_path.exists()})
+
+
+@app.route("/rewrite", methods=["POST"])
+def rewrite():
+    if not article_rewriter.is_available():
+        return jsonify({
+            "error": "anthropic 패키지가 설치되어 있지 않습니다. 'pip install anthropic' 실행 후 다시 시도해주세요."
+        }), 400
+
+    data = request.get_json(force=True)
+    article = (data.get("article") or "").strip()
+    if not article:
+        return jsonify({"error": "기사 내용을 입력해주세요."}), 400
+
+    try:
+        rewritten = article_rewriter.rewrite_article(article)
+    except Exception as e:
+        msg = str(e).lower()
+        if "api_key" in msg or "authentication" in msg or "x-api-key" in msg:
+            return jsonify({
+                "error": "Anthropic API 키가 설정되어 있지 않습니다. "
+                         "console.anthropic.com에서 키를 발급받아 ANTHROPIC_API_KEY 환경변수로 설정해주세요."
+            }), 400
+        return jsonify({"error": f"기사 재작성 실패: {e}"}), 400
+
+    return jsonify({"rewritten": rewritten})
 
 
 @app.route("/audio/<file_id>")

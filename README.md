@@ -56,3 +56,20 @@ python tts_supertonic.py --text "첫 줄입니다.
 
 웹 UI(`shorts_app.py`)의 나레이션 섹션에서도 **"텍스트 → TTS(로컬)"** 모드를 선택하면
 같은 엔진으로 생성한 음성이 영상 제작에 바로 쓰입니다 (선택 사항).
+
+### 뉴스 기사 → 후킹력 있는 대본으로 AI 재작성 (선택, 유료)
+
+`tts_app.py`(`run_tts.bat`) 화면 상단에 일반 뉴스 기사를 붙여넣고 "AI로 재작성"을 누르면
+Claude API가 시청자의 관심을 끄는 나레이션 대본으로 다시 써줍니다 (사실관계는 그대로 유지하고
+문체·구성만 다듬습니다). 이 기능은 별도의 Anthropic API 키가 필요하고, 사용한 만큼 과금됩니다.
+
+1. https://console.anthropic.com 에서 가입 후 API 키 발급
+2. 아래처럼 환경변수로 설정 (Windows PowerShell):
+   ```powershell
+   setx ANTHROPIC_API_KEY "발급받은키"
+   ```
+   설정 후 새 PowerShell 창을 열어야 반영됩니다.
+3. `pip install -r requirements.txt`로 `anthropic` 패키지 설치 후 `run_tts.bat` 재실행
+
+API 키가 없어도 나머지 기능(TTS 음성/자막 생성)은 그대로 사용할 수 있습니다 — 재작성 버튼만
+안내 메시지를 보여줍니다.
