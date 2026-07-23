@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supertonic 3 로컬 나레이션 생성기</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f0; color: #1a1a1a; min-height: 100vh; padding: 0 0 60px;
+  }
+  .header {
+    background: #fff; border-bottom: 1px solid #e8e8e4;
+    padding: 20px 24px 16px;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header p  { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.5; }
+  .main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+  .card {
+    background: #fff; border: 1px solid #e8e8e4;
+    border-radius: 12px; padding: 18px; margin-bottom: 14px;
+  }
+  textarea {
+    width: 100%; border: 1px solid #e0e0da; border-radius: 8px;
+    padding: 12px 14px; font-size: 14px; font-family: inherit;
+    resize: vertical; outline: none;
+  }
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+  select {
+    border: 1px solid #e0e0da; border-radius: 8px; padding: 9px 12px;
+    font-size: 13px; background: #fff; min-width: 140px;
+  }
+  .btn-generate {
+    width: 100%; padding: 14px; margin-top: 16px;
+    background: #1a1a1a; color: #fff; border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+  .result { margin-top: 16px; display: none; }
+  .result audio { width: 100%; margin-top: 8px; }
+  .btn-download {
+    display: inline-block; margin-top: 10px; padding: 10px 22px;
+    background: #4a7cf6; color: #fff; border-radius: 8px;
+    text-decoration: none; font-size: 13px; font-weight: 600;
+  }
+  .error-msg {
+    background: #fff0f0; border: 1px solid #ffcdd2; border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; color: #c62828; margin-top: 14px; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Supertonic 3 로컬 나레이션 생성기</h1>
+  <p>대본을 입력하면 로컬(오프라인) TTS로 음성 파일(wav)만 생성합니다 — 영상 제작과는 무관합니다.</p>
+</div>
+
+<div class="main">
+  <div class="card">
+    <textarea id="text" rows="6" placeholder="나레이션 대본을 입력하세요..."></textarea>
+    <div class="row">
+      <div>
+        <label>음성</label>
+        <select id="voice">
+          {% for v in voices %}
+          <option value="{{ v }}">{{ v }} ({{ '여성' if v.startswith('F') else '남성' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>언어</label>
+        <select id="lang">
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="na">자동 감지</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-generate" id="btnGenerate">음성 생성</button>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="result" id="result">
+      <audio id="player" controls></audio>
+      <br>
+      <a class="btn-download" id="btnDownload" href="#" download>wav 다운로드</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const btn = document.getElementById('btnGenerate');
+btn.addEventListener('click', async () => {
+  const text = document.getElementById('text').value.trim();
+  const errorEl = document.getElementById('errorMsg');
+  const resultEl = document.getElementById('result');
+  errorEl.style.display = 'none';
+  resultEl.style.display = 'none';
+
+  if (!text) {
+    errorEl.textContent = '대본을 입력해주세요.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '생성 중...';
+
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        voice: document.getElementById('voice').value,
+        lang:  document.getElementById('lang').value,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      errorEl.textContent = data.error;
+      errorEl.style.display = 'block';
+    } else {
+      document.getElementById('player').src = `/audio/${data.file_id}?t=${Date.now()}`;
+      document.getElementById('btnDownload').href = `/download/${data.file_id}`;
+      resultEl.style.display = 'block';
+    }
+  } catch (e) {
+    errorEl.textContent = '서버 연결 오류: ' + e.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '음성 생성';
+  }
+});
+</script>
+</body>
+</html>

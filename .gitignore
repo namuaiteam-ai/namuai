@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 shorts_jobs/
+tts_output/
 output/
 test_assets/
 *.mp4

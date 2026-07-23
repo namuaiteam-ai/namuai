@@ -23,14 +23,21 @@ install_tts.bat
 pip install -r requirements.txt
 ```
 
-### 사용
+### 사용 (영상 제작과 무관하게 나레이션 wav만 필요할 때)
 
-- 웹 UI(`shorts_app.py`)의 나레이션 섹션에서 **"텍스트 → TTS(로컬)"** 모드를 선택하고 대본을 입력하면
-  자동으로 음성이 생성되어 영상 제작에 사용됩니다.
-- CLI에서 직접 wav 파일을 만들고 싶다면:
+`run_tts.bat` 더블클릭 (또는 `python tts_app.py`) → http://localhost:5001 에서
+대본을 입력하고 음성 생성 버튼을 누르면 wav 파일을 바로 듣고 다운로드할 수 있습니다.
+영상 제작 기능과는 완전히 분리된 독립 도구입니다.
+
+CLI로 직접 wav 파일을 만들고 싶다면:
 
 ```
 python tts_supertonic.py --text "안녕하세요" --out narration.wav --voice F1 --lang ko
 ```
 
 지원 음성: `F1`~`F5`(여성), `M1`~`M5`(남성). 지원 언어: 한국어(`ko`), 영어(`en`), 일본어(`ja`) 등 31개 언어.
+
+### 영상 제작 툴과 연동해서 쓰고 싶다면
+
+웹 UI(`shorts_app.py`)의 나레이션 섹션에서도 **"텍스트 → TTS(로컬)"** 모드를 선택하면
+같은 엔진으로 생성한 음성이 영상 제작에 바로 쓰입니다 (선택 사항).
