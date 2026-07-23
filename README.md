@@ -3,7 +3,7 @@
 이미지 · 나레이션 오디오 · 자막을 조합해 ffmpeg 기반 Shorts 영상을 만듭니다.
 
 - CLI: `make_shorts.py` (`run_shorts.bat`으로 실행)
-- 웹 UI: `shorts_app.py` (`python shorts_app.py` → http://localhost:5000)
+- 웹 UI: `shorts_app.py` (`run_app.bat` 더블클릭, 또는 `python shorts_app.py` → http://localhost:5000)
 
 ## 로컬 TTS (Supertonic 3)
 
