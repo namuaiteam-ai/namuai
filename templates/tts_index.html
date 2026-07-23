@@ -41,9 +41,14 @@
   .result { margin-top: 16px; display: none; }
   .result audio { width: 100%; margin-top: 8px; }
   .btn-download {
-    display: inline-block; margin-top: 10px; padding: 10px 22px;
+    display: inline-block; margin-top: 10px; margin-right: 8px; padding: 10px 22px;
     background: #4a7cf6; color: #fff; border-radius: 8px;
     text-decoration: none; font-size: 13px; font-weight: 600;
+  }
+  .btn-download.secondary { background: #6b7280; }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px;
+    font-size: 12px; color: #666;
   }
   .error-msg {
     background: #fff0f0; border: 1px solid #ffcdd2; border-radius: 10px;
@@ -55,12 +60,16 @@
 
 <div class="header">
   <h1>Supertonic 3 로컬 나레이션 생성기</h1>
-  <p>대본을 입력하면 로컬(오프라인) TTS로 음성 파일(wav)만 생성합니다 — 영상 제작과는 무관합니다.</p>
+  <p>대본을 입력하면 로컬(오프라인) TTS로 음성(wav)과 그에 맞춰 타이밍이 자동 계산된 자막(srt)을 생성합니다 — 영상 제작과는 무관합니다.</p>
 </div>
 
 <div class="main">
   <div class="card">
-    <textarea id="text" rows="6" placeholder="나레이션 대본을 입력하세요..."></textarea>
+    <textarea id="text" rows="6" placeholder="나레이션 대본을 입력하세요...&#10;줄바꿈으로 자막 한 줄씩 구분됩니다."></textarea>
+    <div class="checkbox-row">
+      <input type="checkbox" id="withSubtitle" checked>
+      <label for="withSubtitle">자막 파일(.srt)도 함께 생성 (줄바꿈 = 자막 한 줄)</label>
+    </div>
     <div class="row">
       <div>
         <label>음성</label>
@@ -90,6 +99,7 @@
       <audio id="player" controls></audio>
       <br>
       <a class="btn-download" id="btnDownload" href="#" download>wav 다운로드</a>
+      <a class="btn-download secondary" id="btnDownloadSrt" href="#" download style="display:none">srt 자막 다운로드</a>
     </div>
   </div>
 </div>
@@ -120,6 +130,7 @@ btn.addEventListener('click', async () => {
         text,
         voice: document.getElementById('voice').value,
         lang:  document.getElementById('lang').value,
+        with_subtitle: document.getElementById('withSubtitle').checked,
       }),
     });
     const data = await res.json();
@@ -129,6 +140,13 @@ btn.addEventListener('click', async () => {
     } else {
       document.getElementById('player').src = `/audio/${data.file_id}?t=${Date.now()}`;
       document.getElementById('btnDownload').href = `/download/${data.file_id}`;
+      const srtBtn = document.getElementById('btnDownloadSrt');
+      if (data.has_subtitle) {
+        srtBtn.href = `/subtitle/${data.file_id}`;
+        srtBtn.style.display = 'inline-block';
+      } else {
+        srtBtn.style.display = 'none';
+      }
       resultEl.style.display = 'block';
     }
   } catch (e) {

@@ -41,16 +41,23 @@ def generate():
     voice = data.get("voice", "F1")
     lang = data.get("lang", "ko")
     speed = float(data.get("speed", 1.05))
+    with_subtitle = bool(data.get("with_subtitle", True))
 
     file_id = uuid.uuid4().hex[:10]
     out_path = OUTPUT_DIR / f"{file_id}.wav"
+    srt_path = OUTPUT_DIR / f"{file_id}.srt"
 
     try:
-        tts_supertonic.synthesize_to_file(text, out_path, voice=voice, lang=lang, speed=speed)
+        if with_subtitle:
+            lines = tts_supertonic.split_script_lines(text)
+            tts_supertonic.synthesize_with_srt(
+                lines, out_path, srt_path, voice=voice, lang=lang, speed=speed)
+        else:
+            tts_supertonic.synthesize_to_file(text, out_path, voice=voice, lang=lang, speed=speed)
     except Exception as e:
         return jsonify({"error": f"음성 생성 실패: {e}"}), 400
 
-    return jsonify({"file_id": file_id})
+    return jsonify({"file_id": file_id, "has_subtitle": with_subtitle and srt_path.exists()})
 
 
 @app.route("/audio/<file_id>")
@@ -68,6 +75,15 @@ def download(file_id: str):
         return jsonify({"error": "파일 없음"}), 404
     return send_file(path, mimetype="audio/wav", as_attachment=True,
                       download_name="narration.wav")
+
+
+@app.route("/subtitle/<file_id>")
+def subtitle_download(file_id: str):
+    path = OUTPUT_DIR / f"{file_id}.srt"
+    if not path.exists():
+        return jsonify({"error": "파일 없음"}), 404
+    return send_file(path, mimetype="text/srt", as_attachment=True,
+                      download_name="narration.srt")
 
 
 if __name__ == "__main__":

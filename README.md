@@ -29,10 +29,18 @@ pip install -r requirements.txt
 대본을 입력하고 음성 생성 버튼을 누르면 wav 파일을 바로 듣고 다운로드할 수 있습니다.
 영상 제작 기능과는 완전히 분리된 독립 도구입니다.
 
-CLI로 직접 wav 파일을 만들고 싶다면:
+**자막(.srt)도 함께 생성됩니다.** 대본에서 줄바꿈된 한 줄이 자막 한 줄이 되고, 그 줄을 실제로
+합성한 음성 길이에 맞춰 타이밍이 자동 계산됩니다 (줄바꿈이 없으면 문장 부호 기준으로 자동 분리).
+생성된 srt는 `shorts_app.py`의 자막 업로드에 그대로 쓸 수 있습니다.
+
+CLI로 직접 만들고 싶다면:
 
 ```
 python tts_supertonic.py --text "안녕하세요" --out narration.wav --voice F1 --lang ko
+
+:: 자막도 함께 (대본에 줄바꿈으로 자막 줄 구분)
+python tts_supertonic.py --text "첫 줄입니다.
+둘째 줄입니다." --out narration.wav --srt-out narration.srt --voice F1 --lang ko
 ```
 
 지원 음성: `F1`~`F5`(여성), `M1`~`M5`(남성). 지원 언어: 한국어(`ko`), 영어(`en`), 일본어(`ja`) 등 31개 언어.
