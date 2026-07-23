@@ -15,6 +15,8 @@ from pathlib import Path
 from flask import (Flask, Response, jsonify, render_template,
                    request, send_file, stream_with_context)
 
+import tts_supertonic
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB
 
@@ -74,6 +76,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/tts/voices")
+def tts_voices():
+    return jsonify({
+        "available": tts_supertonic.is_available(),
+        "voices": tts_supertonic.VOICE_STYLES,
+    })
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     job_id = uuid.uuid4().hex[:10]
@@ -94,6 +104,26 @@ def generate():
     subtitle = str(save_upload(request.files.get("subtitle"), job_dir) or "") or None
 
     form = request.form
+
+    # 오디오 파일이 없고 나레이션 텍스트가 있으면 Supertonic으로 로컬 TTS 생성
+    narration_text = (form.get("narration_text") or "").strip()
+    if not audio and narration_text:
+        if not tts_supertonic.is_available():
+            return jsonify({
+                "error": "로컬 TTS(Supertonic)가 설치되어 있지 않습니다. "
+                         "'pip install supertonic' 실행 후 다시 시도해주세요."
+            }), 400
+        try:
+            tts_path = job_dir / "narration_tts.wav"
+            tts_supertonic.synthesize_to_file(
+                narration_text, tts_path,
+                voice=form.get("tts_voice", "F1"),
+                lang=form.get("tts_lang", "ko"),
+                speed=float(form.get("tts_speed", 1.05)),
+            )
+            audio = str(tts_path)
+        except Exception as e:
+            return jsonify({"error": f"TTS 생성 실패: {e}"}), 400
     cfg = {
         "width":          int(form.get("width",  720)),
         "height":         int(form.get("height", 1280)),
