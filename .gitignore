@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 shorts_jobs/
 tts_output/
+voice_styles/*.json
 output/
 test_assets/
 *.mp4

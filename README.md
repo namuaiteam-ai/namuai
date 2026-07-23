@@ -37,6 +37,13 @@ python tts_supertonic.py --text "안녕하세요" --out narration.wav --voice F1
 
 지원 음성: `F1`~`F5`(여성), `M1`~`M5`(남성). 지원 언어: 한국어(`ko`), 영어(`en`), 일본어(`ja`) 등 31개 언어.
 
+### 더 개성 있는 목소리 (커스텀 음성)
+
+기본 10개 음성이 밋밋하게 느껴진다면, Supertone의 [Voice Builder](https://supertonic.supertone.ai/voice-builder)에서
+원하는 목소리를 녹음/업로드해 커스텀 음성 스타일(JSON)을 만든 뒤 `voice_styles/` 폴더에 넣으세요.
+자세한 방법은 `voice_styles/README.md` 참고. 넣고 나면 `tts_app.py`/`shorts_app.py`의 음성 선택 목록에
+자동으로 추가됩니다.
+
 ### 영상 제작 툴과 연동해서 쓰고 싶다면
 
 웹 UI(`shorts_app.py`)의 나레이션 섹션에서도 **"텍스트 → TTS(로컬)"** 모드를 선택하면

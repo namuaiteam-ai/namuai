@@ -66,7 +66,11 @@
         <label>음성</label>
         <select id="voice">
           {% for v in voices %}
+          {% if v in builtin_voices %}
           <option value="{{ v }}">{{ v }} ({{ '여성' if v.startswith('F') else '남성' }})</option>
+          {% else %}
+          <option value="{{ v }}">{{ v }} (커스텀)</option>
+          {% endif %}
           {% endfor %}
         </select>
       </div>

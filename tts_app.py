@@ -21,7 +21,9 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 @app.route("/")
 def index():
-    return render_template("tts_index.html", voices=tts_supertonic.VOICE_STYLES)
+    voices = tts_supertonic.VOICE_STYLES + tts_supertonic.list_custom_voices()
+    return render_template("tts_index.html", voices=voices,
+                           builtin_voices=set(tts_supertonic.VOICE_STYLES))
 
 
 @app.route("/generate", methods=["POST"])

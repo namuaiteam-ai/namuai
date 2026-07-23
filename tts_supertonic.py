@@ -19,7 +19,16 @@ from pathlib import Path
 
 VOICE_STYLES = ["F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"]
 
+CUSTOM_VOICE_DIR = Path("voice_styles")
+
 _tts_cache: dict = {}
+
+
+def list_custom_voices() -> list[str]:
+    """voice_styles/ 폴더에 있는 커스텀 음성 스타일(json) 파일명 목록을 반환한다."""
+    if not CUSTOM_VOICE_DIR.is_dir():
+        return []
+    return sorted(p.stem for p in CUSTOM_VOICE_DIR.glob("*.json"))
 
 
 def is_available() -> bool:
@@ -50,7 +59,13 @@ def synthesize_to_file(
         raise ValueError("합성할 텍스트가 비어 있습니다.")
 
     tts = _get_engine(model)
-    style = tts.get_voice_style(voice)
+
+    custom_path = CUSTOM_VOICE_DIR / f"{voice}.json"
+    if custom_path.is_file():
+        style = tts.get_voice_style_from_path(custom_path)
+    else:
+        style = tts.get_voice_style(voice)
+
     wav, _duration = tts.synthesize(text.strip(), voice_style=style, lang=lang, speed=speed)
 
     out_path = Path(out_path)
@@ -63,7 +78,9 @@ def main():
     parser = argparse.ArgumentParser(description="Supertonic 3 로컬 TTS 나레이션 생성")
     parser.add_argument("--text", required=True, help="합성할 텍스트")
     parser.add_argument("--out", required=True, help="출력 wav 경로")
-    parser.add_argument("--voice", default="F1", choices=VOICE_STYLES, help="음성 스타일")
+    parser.add_argument("--voice", default="F1",
+                        help=f"음성 스타일. 내장: {', '.join(VOICE_STYLES)}. "
+                             f"또는 voice_styles/<이름>.json 커스텀 음성 이름")
     parser.add_argument("--lang", default="ko", help="언어 코드 (예: ko, en, ja)")
     parser.add_argument("--speed", type=float, default=1.05, help="배속")
     args = parser.parse_args()

@@ -80,7 +80,8 @@ def index():
 def tts_voices():
     return jsonify({
         "available": tts_supertonic.is_available(),
-        "voices": tts_supertonic.VOICE_STYLES,
+        "voices": tts_supertonic.VOICE_STYLES + tts_supertonic.list_custom_voices(),
+        "builtin_voices": tts_supertonic.VOICE_STYLES,
     })
 
 
