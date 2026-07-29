@@ -13,3 +13,5 @@ test_assets/
 *.wav
 *.m4a
 *.aac
+seedance_clips.json
+seedance_manifest.json

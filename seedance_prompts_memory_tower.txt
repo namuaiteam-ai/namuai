@@ -1,0 +1,136 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+「기억의 탑」 Seedance 2.0 영상 프롬프트
+총 20클립 × 15초 = 5분 (300초)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[공통 스타일 설정 - 모든 클립에 적용]
+Style: cinematic sci-fi, 4K, photorealistic
+Color grading: dual-tone — cool steel-blue for future Seoul / warm sepia for memory scenes
+Aspect ratio: 16:9
+Camera: smooth motion, no shaky cam
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【씬 1 | 3001년 서울 전경 오프닝】
+
+─── CLIP 01 | 0:00~0:15 ───────────────
+[장면] 드론 하이앵글 - 서울 스카이라인 파노라마
+[프롬프트]
+Aerial drone shot slowly descending over futuristic Seoul skyline in year 3001. Towering transparent glass skyscrapers reflecting holographic light. Han River below, glowing with bioluminescent water. Maglev trains glide silently on elevated rails above the city. Cool blue and silver color palette. Pre-dawn atmosphere, city lights twinkling. Cinematic 4K, ultra-wide lens. Smooth downward camera movement.
+
+─── CLIP 02 | 0:15~0:30 ───────────────
+[장면] 자기부상 열차 클로즈업 + 홀로그램 거리
+[프롬프트]
+Close-up shot of a sleek maglev train silently passing camera at high speed on a glass rail suspended mid-air. Camera tilts down to street level — holographic Korean signage floats above storefronts. Pedestrians wearing thin AR lens implants, digital overlays visible in their eyes. Mist drifts between buildings. Cool neon-tinted ambient light. Slow pan left to right.
+
+─── CLIP 03 | 0:30~0:45 ───────────────
+[장면] 기억 보관소 타워 외벽 - 건물 외관 풀샷
+[프롬프트]
+Establishing shot of the Memory Archive Tower — an enormous cylindrical skyscraper made of layered translucent white panels. Faint blue pulsing light radiates from within each floor. Korean text "기억 보관소" etched in subtle gold lettering on the facade. Camera slowly cranes upward from ground level. Overcast sky, soft diffused light. Futuristic Seoul cityscape in background. Photorealistic 4K.
+
+─── CLIP 04 | 0:45~1:00 ───────────────
+[장면] 타이틀 자막 + 나레이션 연출 컷 (도시 + 텍스트 오버레이)
+[프롬프트]
+Slow aerial pull-back revealing the full futuristic Seoul cityline at golden hour. Warm amber light breaks through heavy clouds, casting long shadows on glass towers. Camera movement is very slow and majestic. Atmospheric haze. This is a title card scene — wide, contemplative, no people visible. Cinematic scope, ultra-detailed environment. Mood: reflective, epic.
+
+
+【씬 2 | 기억 보관소 내부 - 유진의 하루】
+
+─── CLIP 05 | 1:00~1:15 ───────────────
+[장면] 보관소 내부 복도 - 유진 등장
+[프롬프트]
+Interior of a futuristic memory archive facility. Long white corridor with soft blue ambient lighting. A young Korean woman in her late 20s — short black hair, expressionless face, white form-fitting uniform — walks purposefully toward camera. Holographic data panels float beside her as she walks. Sterile, clinical atmosphere. Shallow depth of field. Camera tracks slowly forward matching her pace.
+
+─── CLIP 06 | 1:15~1:30 ───────────────
+[장면] 유진 손동작 - 홀로그램 리스트 스크롤
+[프롬프트]
+Close-up of a woman's hand gesturing in mid-air, scrolling through a translucent holographic interface. Korean text and data streams visible on the floating panel. Her fingers move with practiced efficiency. Background is blurred white corridor. Cool blue tones. The holographic display reflects faintly on her skin. Camera is static, tight close-up on hands and panel only.
+
+─── CLIP 07 | 1:30~1:45 ───────────────
+[장면] 유진 얼굴 - 임무 확인 후 무표정 승인
+[프롬프트]
+Medium close-up of a young Korean woman's face, expressionless, staring at a holographic display just off-camera. Soft blue light reflects on her face from the screen. She makes a small deliberate gesture — one finger tap — to confirm. Her expression does not change. Minimal movement, emotionally flat. Cold, clinical lighting. Rack focus from screen reflection in her AR lens to her eyes.
+
+
+【씬 3 | 기억 미리보기 - 감정의 균열】
+
+─── CLIP 08 | 1:45~2:00 ───────────────
+[장면] 기억 캡슐 의자에 앉는 유진 - 헬멧 착용
+[프롬프트]
+A young Korean woman in a white uniform sits down in a sleek white memory pod chair. She picks up a thin translucent helmet and places it over her head. The helmet glows softly as it activates — faint blue pulses spread from the crown. Room is all white with minimal detail. Camera slowly circles around her at medium distance as the helmet seals. Cinematic, contemplative.
+
+─── CLIP 09 | 2:00~2:15 ───────────────
+[장면] 기억 재현 - 1990년대 서울 부엌 (할머니 30대)
+[프롬프트]
+Memory flashback scene: warm sepia-toned 1990s Korean kitchen. A Korean woman in her 30s in simple everyday clothing, smiling warmly, mixing kimchi in a large ceramic bowl. Sunlight streams through a small window. Cluttered, lived-in kitchen — old wooden shelves, ceramic pots. The entire scene has a faint holographic shimmer at the edges, indicating it is a memory. Warm amber tones. Camera is static, observational.
+
+─── CLIP 10 | 2:15~2:30 ───────────────
+[장면] 기억 재현 - 할머니와 아이 (부엌 장면 클로즈업)
+[프롬프트]
+Close-up of an elderly Korean woman's hands gently patting a child's head in a 1990s kitchen. Warm sepia filter. Soft natural light. The woman laughs quietly. A child's small hands reach toward a bowl of food. The edges of the frame have a faint translucent glow — this is a memory hologram. Shallow depth of field. Intimate, nostalgic mood. Camera static, tight on hands and faces.
+
+─── CLIP 11 | 2:30~2:45 ───────────────
+[장면] 기억 재현 - 2050년 기억 저장 부스 (할머니 80대)
+[프롬프트]
+Memory scene: Year 2050 interior. An elderly Korean woman in her 80s sits inside a small white memory recording booth. She wipes a tear from her eye and looks directly into a camera inside the booth. Soft white lighting, very quiet and still. Slightly warmer color than present-day scenes. Holographic shimmer around the edges of the scene. Medium shot, emotionally resonant, slow zoom in very slightly.
+
+─── CLIP 12 | 2:45~3:00 ───────────────
+[장면] 캡슐 안의 유진 - 표정 변화 시작
+[프롬프트]
+Inside the memory pod, a young Korean woman wearing a glowing translucent helmet. Her face is partially visible through the visor. Her expression begins to crack — brow furrowing, jaw tightening. Her gloved hand trembles slightly on the armrest. Blue light from the helmet pulses rhythmically. The only sound is ambient hum. Camera is a very slow push-in to her face. Cinematic, emotional.
+
+
+【씬 4 | 선택의 순간】
+
+─── CLIP 13 | 3:00~3:15 ───────────────
+[장면] 헬멧 벗는 유진 - 감정 억제
+[프롬프트]
+A young Korean woman in a white uniform slowly lifts a glowing helmet off her head inside a white memory pod room. She sets it on the armrest. She sits very still for a moment, composing herself — eyes glistening but expression controlled. Blue ambient light. Camera is at eye level, medium close-up. Very slow movement. The room is silent. She exhales slowly. Photorealistic, 4K.
+
+─── CLIP 14 | 3:15~3:30 ───────────────
+[장면] 유진 - 결정의 눈빛 (카메라 응시 or 허공 응시)
+[프롬프트]
+Close-up of a young Korean woman's face in a sterile white room. She looks slightly upward and to the left, eyes glistening, processing an internal decision. A faint reflection of holographic data is visible in her AR lens. Her lips are slightly parted. She is very still. Blue-white lighting. Rack focus from background glow to her eyes. This is a pivotal emotional moment. No dialogue needed — the face tells the story.
+
+─── CLIP 15 | 3:30~3:45 ───────────────
+[장면] 유진 손바닥 위 기억 렌즈 - 빛이 맴도는 클로즈업
+[프롬프트]
+Extreme close-up of a woman's open palm. A small transparent circular lens — a memory storage device — rests in her palm. Inside the lens, tiny particles of light swirl and pulse, like memories contained in glass. Warm amber and blue light alternate softly. Background is completely blurred. Camera is static. The lens glows faintly, casting light on her skin. Poetic, symbolic shot. 4K macro detail.
+
+─── CLIP 16 | 3:45~4:00 ───────────────
+[장면] 유진 - 공유 보관함 이전 승인 제스처
+[프롬프트]
+A young Korean woman standing in a white corridor, making a deliberate two-finger gesture in the air — confirming a holographic prompt that reads in Korean. The holographic display shifts from red "삭제" to blue "보관 이전". Her face is calm but purposeful — the first moment of quiet resolve. Cool blue light washes over her uniform. Camera pulls back slowly as she lowers her hand. Cinematic, understated.
+
+
+【씬 5 | 옥상 에필로그】
+
+─── CLIP 17 | 4:00~4:15 ───────────────
+[장면] 기억 보관소 타워 옥상 - 밤 서울 전경
+[프롬프트]
+Rooftop of the Memory Archive Tower at night in year 3001 Seoul. A young Korean woman in a white uniform stands at the edge railing, looking out over the glittering city below. Gentle wind moves her hair. Han River reflects city lights far below. Maglev trains trace glowing arcs across the skyline. Camera slowly circles around her from behind. Peaceful, vast, lonely. Cool blue tones with warm city glow below.
+
+─── CLIP 18 | 4:15~4:30 ───────────────
+[장면] 할머니 홀로그램 재생 - 한강변 걷는 장면
+[프롬프트]
+On a futuristic rooftop at night, a semi-transparent holographic projection materializes beside a young woman. The hologram shows an elderly Korean woman walking along the Han River in daylight — a memory from decades past. The hologram is warm sepia-toned, surrounded by a soft golden glow, contrasting the cold blue night sky. Camera slowly moves sideways to frame both the living woman and the ghostly hologram side by side. Emotional, poetic.
+
+─── CLIP 19 | 4:30~4:45 ───────────────
+[장면] 유진 독백 씬 - 얼굴 클로즈업 + 서울 야경 보케
+[프롬프트]
+Close-up of a young Korean woman's face on a rooftop at night. City lights of future Seoul bokeh softly in the background. Her eyes are calm, reflective, slightly tearful but peaceful. Wind moves strands of hair across her face. The warm glow of the city below reflects on her cheek. She is still, looking outward. Camera is static. This is a monologue scene — pure emotion. Shallow depth of field. Cinematic 4K.
+
+
+【씬 6 | 엔딩】
+
+─── CLIP 20 | 4:45~5:00 ───────────────
+[장면] 유진 렌즈 착용 → 서울 스카이라인 + 기억 오버레이 페이드 아웃
+[프롬프트]
+A young Korean woman on a rooftop gently places a small transparent lens into her eye. Her POV shifts — the futuristic Seoul skyline is now overlaid with translucent memory fragments: a 1990s kitchen, a smiling grandmother, a child's laughter visualized as soft light. The two worlds — present and memory — blend together in double exposure. Camera slowly pulls back. Everything fades gently to black. Final frame: city lights and memory glow fused together. Poetic, cinematic ending. 4K.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Seedance 2.0 권장 설정]
+- Motion Intensity: Medium (씬1~4), Low (씬5~6)
+- Camera Motion: Smooth / Cinematic
+- Duration: 15s per clip
+- Resolution: 1080p or 4K
+- Negative prompt (공통): shaky camera, low quality, anime style, cartoon, text overlay, watermark, overexposed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
