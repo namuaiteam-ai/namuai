@@ -1177,11 +1177,12 @@ async function generateSceneImage(idx) {
     const addStateIdx = add.dep.inputs.indexOf(WAN.stateCompId);
     const addModelIdx = add.dep.inputs.indexOf(WAN.modelChoiceCompId);
     addLog(`process_prompt_and_add_tasks 입력: state@idx${addStateIdx} model_type=${addStateIdx>=0 ? JSON.stringify(addData[addStateIdx] && addData[addStateIdx].model_type) : 'N/A'}, model_choice@idx${addModelIdx}=${addModelIdx>=0 ? addData[addModelIdx] : 'N/A'}`, 'info');
+    const safeStr = (v) => { try { const s = JSON.stringify(v); return s === undefined ? String(v) : s; } catch(e) { return String(v); } };
     add.dep.inputs.forEach((id, i) => {
       const c = wanComponentById(config, id);
       const label = c && c.props ? c.props.label : undefined;
       const choicesSample = c && c.props && Array.isArray(c.props.choices) ? c.props.choices.slice(0, 3) : undefined;
-      addLog(`  입력[${i}] id=${id} type=${c ? c.type : '?'} label=${label} value=${JSON.stringify(c && c.props ? c.props.value : undefined).slice(0,80)} choices샘플=${JSON.stringify(choicesSample)}`, 'info');
+      addLog(`  입력[${i}] id=${id} type=${c ? c.type : '?'} label=${label} value=${safeStr(c && c.props ? c.props.value : undefined).slice(0,80)} choices샘플=${safeStr(choicesSample)}`, 'info');
     });
     const addOutput = await wanCall(url, add.index, addData, sessionHash);
     wanRecordOutputs(add.dep, addOutput);
