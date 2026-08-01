@@ -744,31 +744,42 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
-// 페이지가 브라우저에서 열릴 때 자동 실행되는 load 이벤트를 찾음 (세션별 상태를 서버에 등록하는 역할로 추정)
-function wanFindLoadDependency(config) {
-  const deps = config.dependencies || [];
-  for (let i = 0; i < deps.length; i++) {
-    const d = deps[i];
-    const targets = d.targets || [];
-    const isLoad = d.trigger === 'load' || targets.some(t => Array.isArray(t) ? t[1] === 'load' : false);
-    if (isLoad) return { dep: d, index: i };
-  }
-  return null;
+// 실제 브라우저는 페이지 로드 시 /queue/data?session_hash=... 로 지속적인 SSE 연결을 맺어두는데,
+// 이게 서버 쪽에 "이 session_hash는 활성 상태"라고 등록하는 역할을 하는 것으로 보임.
+// 이 연결이 없으면 WanGP가 모든 함수 호출을 "Session not found"로 거부함.
+function wanOpenQueueStream(url, prefix, sessionHash) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const es = new EventSource(`${url}${prefix}/queue/data?session_hash=${sessionHash}`);
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; resolve(es); } // onopen이 안 와도 일정 시간 후 진행
+    }, 1500);
+    es.onopen = () => {
+      if (!settled) { settled = true; clearTimeout(timer); resolve(es); }
+    };
+    es.onerror = () => {
+      if (!settled) { settled = true; clearTimeout(timer); es.close(); reject(new Error('queue/data 연결 실패')); }
+    };
+  });
 }
 
-// 우리가 만든 session_hash를 서버가 알도록, save_inputs 등을 호출하기 전에 load 이벤트를 한 번 실행
 async function wanEnsureSession(url, config, sessionHash) {
   if (WAN.sessionInitialized) return;
-  const loadInfo = wanFindLoadDependency(config);
-  if (loadInfo) {
-    const apiId = loadInfo.dep.api_name || String(loadInfo.index);
-    const loadData = wanBuildData(config, loadInfo.dep, {});
+  const prefixesToTry = (WAN.endpointStyle && WAN.endpointStyle.prefix !== undefined)
+    ? [WAN.endpointStyle.prefix]
+    : ['/gradio_api', ''];
+  let lastErr = null;
+  for (const prefix of prefixesToTry) {
     try {
-      await wanCall(url, apiId, loadData, sessionHash);
+      const es = await wanOpenQueueStream(url, prefix, sessionHash);
+      WAN.queueStream = es;
+      WAN.sessionInitialized = true;
+      return;
     } catch(e) {
-      addLog(`세션 초기화(load) 호출 실패, 계속 진행: ${e.message}`, 'info');
+      lastErr = e;
     }
   }
+  addLog(`세션 등록용 큐 연결 실패, 계속 진행: ${lastErr ? lastErr.message : ''}`, 'info');
   WAN.sessionInitialized = true;
 }
 
