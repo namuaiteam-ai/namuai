@@ -844,12 +844,14 @@ async function wanTriggerLoadEvents(url, config, sessionHash) {
 // model_type만 원하는 값으로 바꿔치기해서 WAN.componentValues에 심어둠. 이후 모든 호출은
 // 이 값을 그대로 이어받음 (wanBuildData가 componentValues를 우선하므로).
 function wanSeedModelType(config, desiredModel) {
+  addLog(`wanSeedModelType: stateCompId=${WAN.stateCompId}, modelChoiceCompId=${WAN.modelChoiceCompId}, desiredModel=${desiredModel}`, 'info');
   if (!WAN.stateCompId || !desiredModel) return;
   const stateComp = wanComponentById(config, WAN.stateCompId);
   const baseState = (WAN.componentValues[WAN.stateCompId] !== undefined)
     ? WAN.componentValues[WAN.stateCompId]
     : (stateComp && stateComp.props ? stateComp.props.value : {});
   const clonedState = JSON.parse(JSON.stringify(baseState || {}));
+  addLog(`state 기본값 model_type=${baseState ? baseState.model_type : 'undefined'} -> ${desiredModel}로 패치`, 'info');
   clonedState.model_type = desiredModel;
   WAN.componentValues[WAN.stateCompId] = clonedState;
   if (WAN.modelChoiceCompId) WAN.componentValues[WAN.modelChoiceCompId] = desiredModel;
@@ -883,7 +885,8 @@ function wanQueueDispatch(msg) {
     if (!waiter) return;
     const out = msg.output;
     if (msg.success === false || (out && out.error)) {
-      waiter.reject(new Error((out && out.error) ? String(out.error) : 'process_completed 실패'));
+      const detail = (out && out.error) ? String(out.error) : `success=${msg.success}, raw=${JSON.stringify(msg).slice(0, 300)}`;
+      waiter.reject(new Error(detail));
     } else {
       waiter.resolve(out ? out.data : null);
     }
@@ -1170,7 +1173,12 @@ async function generateSceneImage(idx) {
 
     // 2) 생성 작업 큐에 등록 (1번에서 갱신된 state를 그대로 이어받음)
     const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
-    await wanCallDep(url, config, add.dep, add.index, sessionHash, {});
+    const addData = wanBuildData(config, add.dep, {});
+    const addStateIdx = add.dep.inputs.indexOf(WAN.stateCompId);
+    const addModelIdx = add.dep.inputs.indexOf(WAN.modelChoiceCompId);
+    addLog(`process_prompt_and_add_tasks 입력: state@idx${addStateIdx} model_type=${addStateIdx>=0 ? JSON.stringify(addData[addStateIdx] && addData[addStateIdx].model_type) : 'N/A'}, model_choice@idx${addModelIdx}=${addModelIdx>=0 ? addData[addModelIdx] : 'N/A'}`, 'info');
+    const addOutput = await wanCall(url, add.index, addData, sessionHash);
+    wanRecordOutputs(add.dep, addOutput);
 
     // 3) 생성 파이프라인 실행 (존재하는 단계만, 버전별로 일부 없을 수 있음)
     for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
