@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShortsForge Ultra Studio (M5)</title>
+<script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #030305;
+    --surface: rgba(18, 18, 26, 0.8);
+    --surface-solid: #12121a;
+    --surface-light: rgba(255, 255, 255, 0.05);
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #ff6b35;
+    --accent-glow: rgba(255, 107, 53, 0.3);
+    --accent2: #7c3aed;
+    --accent2-glow: rgba(124, 58, 237, 0.3);
+    --text: #f8f9fa;
+    --muted: #8e919e;
+    --success: #10b981;
+    --danger: #ef4444;
+    --glass: blur(16px) saturate(180%);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  .bg-glow {
+    position: fixed; top: -10%; left: -10%; width: 40%; height: 40%;
+    background: radial-gradient(circle, var(--accent2-glow) 0%, transparent 70%);
+    z-index: -1; filter: blur(100px); animation: drift 20s infinite alternate;
+  }
+  .bg-glow-2 {
+    position: fixed; bottom: -10%; right: -10%; width: 45%; height: 45%;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    z-index: -1; filter: blur(100px); animation: drift 25s infinite alternate-reverse;
+  }
+  @keyframes drift { from { transform: translate(0, 0); } to { transform: translate(10%, 10%); } }
+
+  .app { max-width: 1200px; margin: 0 auto; padding: 40px 24px; display: flex; flex-direction: column; gap: 30px; }
+
+  header { display: flex; justify-content: space-between; align-items: center; }
+  .logo-group { display: flex; align-items: center; gap: 20px; }
+  .logo-box {
+    width: 56px; height: 56px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px;
+    box-shadow: 0 10px 30px var(--accent-glow);
+  }
+  .logo-text h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; background: linear-gradient(to right, #fff, var(--muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .logo-text p { font-size: 13px; color: var(--muted); font-weight: 300; letter-spacing: 2px; }
+
+  .banner {
+    background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 16px;
+    padding: 16px 24px; display: flex; align-items: center; gap: 16px;
+  }
+  .banner-icon { font-size: 24px; }
+  .banner-text h3 { color: var(--success); font-size: 15px; margin-bottom: 2px; }
+  .banner-text p { color: var(--muted); font-size: 12px; }
+  
+  .main-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+  
+  .card {
+    background: var(--surface); backdrop-filter: var(--glass); border: 1px solid var(--border);
+    border-radius: 20px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); margin-bottom: 24px;
+  }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+
+  .sd-config { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sd-row { display: flex; gap: 12px; align-items: center; }
+  .sd-input { flex: 1; background: var(--surface-solid); border: 1px solid var(--border); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; outline: none; }
+  .sd-btn { background: var(--accent2); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .sd-btn:hover { opacity: 0.8; }
+  .sd-btn:disabled { background: var(--muted); cursor: not-allowed; }
+
+  .drop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .drop-zone {
+    border: 1.5px dashed var(--border); border-radius: 16px; padding: 24px 10px;
+    text-align: center; transition: all 0.2s; background: rgba(255,255,255,0.01); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 140px; position: relative;
+  }
+  .drop-zone.zip-zone { grid-column: span 3; border-color: var(--success); background: rgba(16,185,129,0.05); min-height: 100px; flex-direction: row; gap: 16px; }
+  .drop-zone:hover, .drop-zone.active { border-color: var(--accent2); background: rgba(124, 58, 237, 0.05); }
+  .drop-icon { font-size: 32px; margin-bottom: 8px; display: block; }
+  .drop-text { font-size: 13px; font-weight: 600; color: var(--text); }
+  .drop-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .file-input { display: none; }
+
+  .preview-flex { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
+  .preview-item { width: 48px; height: 48px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--border); }
+
+  .scene-card { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .scene-num { font-size: 11px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; min-width: 28px; }
+  .scene-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 13px; }
+  .scene-gen-btn { background: rgba(255,107,53,0.1); color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+  .scene-gen-btn:hover { background: var(--accent); color: #fff; }
+
+  /* 씬 그리드 카드 */
+  .scene-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-bottom: 4px; }
+  .scene-img-card {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s;
+  }
+  .scene-img-card:hover { border-color: var(--accent2); }
+  .scene-img-card .card-thumb {
+    width: 100%; aspect-ratio: 9/16; max-height: 160px; object-fit: cover;
+    background: #111; display: block; cursor: zoom-in;
+  }
+  .scene-img-card .card-thumb-empty {
+    width: 100%; aspect-ratio: 9/16; max-height: 160px; background: #111;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 28px;
+  }
+  .scene-img-card .card-body { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .scene-img-card .card-scene-num { font-size: 10px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+  .scene-img-card .card-narr { font-size: 12px; color: var(--text); font-weight: 600; line-height: 1.4; }
+  .scene-img-card .card-prompt {
+    font-size: 11px; color: var(--accent2); font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; outline: none;
+    min-height: 60px; line-height: 1.4;
+  }
+  .scene-img-card .card-actions { display: flex; gap: 6px; }
+  .scene-img-card .btn-regen { flex: 1; background: rgba(255,107,53,0.15); border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .scene-img-card .btn-regen:hover { background: var(--accent); color: #fff; }
+  .scene-img-card .btn-zoom { background: rgba(255,255,255,0.07); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer; }
+  .scene-img-card .btn-zoom:hover { border-color: var(--accent2); }
+
+  /* 라이트박스 */
+  #sceneLightbox {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9999;
+    align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  #sceneLightbox.vis { display: flex; }
+  #sceneLightbox img { max-height: 80vh; max-width: 90vw; border-radius: 16px; object-fit: contain; box-shadow: 0 0 60px rgba(124,58,237,0.5); }
+  #sceneLightbox .lb-info { color: #fff; text-align: center; max-width: 600px; }
+  #sceneLightbox .lb-close { position: absolute; top: 20px; right: 28px; font-size: 32px; color: #fff; cursor: pointer; opacity: 0.7; }
+  #sceneLightbox .lb-close:hover { opacity: 1; }
+
+  .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .setting-vbox { display: flex; flex-direction: column; gap: 8px; }
+  .setting-vbox label { font-size: 11px; font-weight: 600; color: var(--muted); }
+  .styled-select { background: var(--surface-light); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 8px 12px; font-size: 13px; outline: none; }
+
+  .preview-wrapper { position: sticky; top: 40px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+  .video-preview-box {
+    width: 100%; max-width: 320px; aspect-ratio: 9/16; background: #000; border-radius: 20px; overflow: hidden; position: relative; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .video-preview-box video { width: 100%; height: 100%; object-fit: cover; }
+  .render-btn { width: 100%; padding: 16px; border: none; border-radius: 16px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3); }
+  .render-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .progress-section { width: 100%; display: none; }
+  .progress-section.visible { display: block; }
+  .progress-track { height: 6px; background: var(--surface-light); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .progress-thumb { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.3s; }
+
+  .log-panel { width: 100%; height: 140px; background: rgba(0,0,0,0.6); border-radius: 12px; padding: 12px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #a5f3fc; line-height: 1.6; }
+  .log-entry.ok { color: #4ade80; }
+  .log-entry.err { color: #f87171; }
+  .log-entry.warn { color: #facc15; }
+
+  .dl-btn { background: var(--surface-light); border: 1px solid var(--border); color: #fff; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; width: 100%; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
+  .dl-btn:hover { background: rgba(255,255,255,0.1); }
+</style>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+
+<div class="app">
+  <header>
+    <div class="logo-group">
+      <div class="logo-box">🎥</div>
+      <div class="logo-text">
+        <h1>ShortsForge <span style="font-weight:300; opacity: 0.6;">Ultra Studio</span></h1>
+        <p>M5.HTML — Wan2GP 로컬 AI 이미지 자동 생성</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- 씬 라이트박스 -->
+  <div id="sceneLightbox" onclick="closeSceneLightbox()">
+    <span class="lb-close" onclick="closeSceneLightbox()">×</span>
+    <img id="lbImg" src="" alt="">
+    <div class="lb-info">
+      <div id="lbTitle" style="font-weight:700; font-size:16px; margin-bottom:6px;"></div>
+      <div id="lbPrompt" style="font-size:12px; color:#a5f3fc; font-family:'JetBrains Mono',monospace; opacity:0.8;"></div>
+    </div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-icon">📦</div>
+    <div class="banner-text">
+      <h3>ZIP 파일 묶음 자동 로딩 지원 (shorts_production_kit.zip)</h3>
+      <p>압축 파일을 아래에 드래그하면 <b>이미지, 나레이션(MP3), 자막(SRT)</b>이 한 번에 자동 세팅됩니다!</p>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="workspace">
+      
+      <!-- Wan2GP LOCAL API -->
+      <div class="card">
+        <div class="card-title"><span>01</span> Wan2GP LOCAL API 설정 (로컬 자동 생성)</div>
+        <div style="display:flex; gap:12px; margin-bottom:16px; align-items:center; background:rgba(16,185,129,0.1); padding:10px 16px; border-radius:8px; border:1px solid rgba(16,185,129,0.2);">
+          <span style="font-size:20px;">📁</span>
+          <div style="flex:1;">
+            <div style="font-size:12px; font-weight:700; color:var(--success);">저장 폴더 선택 (선택 시 이미지 자동 저장)</div>
+            <div id="dirStatus" style="font-size:11px; color:var(--muted);">현재: 메모리에만 임시 저장됨</div>
+          </div>
+          <button class="sd-btn" style="background:var(--success);" onclick="selectOutputDirectory()">출력 폴더 변경</button>
+        </div>
+        <div class="sd-config">
+          <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">Wan2GP 주소</span>
+            <input type="text" class="sd-input" id="sd-url" value="http://127.0.0.1:7860">
+            <button class="sd-btn" onclick="connectSD()">Wan2gp 연결 확인</button>
+          </div>
+          <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">모델 선택</span>
+            <select class="sd-input" id="sd-model" style="cursor:pointer;">
+              <option value="1.3B">1.3B (RTX 3060 권장, 빠름)</option>
+              <option value="14B">14B (고품질, 느림)</option>
+            </select>
+          </div>
+          <div class="sd-row">
+            <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:10px; color:var(--muted);">이미지 너비 (<span id="sd-width-val">256</span>px)</span>
+              <input type="range" id="sd-width" min="128" max="768" step="64" value="256" oninput="document.getElementById('sd-width-val').innerText=this.value">
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:10px; color:var(--muted);">이미지 높이 (<span id="sd-height-val">256</span>px)</span>
+              <input type="range" id="sd-height" min="128" max="768" step="64" value="256" oninput="document.getElementById('sd-height-val').innerText=this.value">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 재료 파일 -->
+      <div class="card">
+        <div class="card-title"><span>02</span> 재료 파일 (ZIP 드롭 가능)</div>
+        
+        <div class="drop-zone zip-zone" id="zipZone">
+          <input type="file" id="zipInput" class="file-input" accept=".zip">
+          <div style="font-size:32px;">🗂️</div>
+          <div style="text-align:left;">
+            <div class="drop-text">ZIP 파일 자동 로딩 (shorts_production_kit.zip)</div>
+            <div class="drop-hint">여기에 ZIP 파일을 통째로 끌어다 놓으세요. 알아서 분류됩니다!</div>
+          </div>
+        </div>
+
+        <div class="drop-grid" style="margin-top:12px;">
+          <div class="drop-zone" id="imgZone">
+            <input type="file" id="imgInput" class="file-input" accept="image/*" multiple>
+            <span class="drop-icon">🖼️</span>
+            <span class="drop-text">이미지 묶음</span>
+            <div id="imgStatus" class="drop-hint">0장</div>
+          </div>
+          <div class="drop-zone" id="audioZone">
+            <input type="file" id="audioInput" class="file-input" accept="audio/*">
+            <span class="drop-icon">🎙️</span>
+            <span class="drop-text">나레이션</span>
+            <div id="audioStatus" class="drop-hint">없음</div>
+          </div>
+          <div class="drop-zone" id="srtZone">
+            <input type="file" id="srtInput" class="file-input" accept=".srt,.json">
+            <span class="drop-icon">📜</span>
+            <span class="drop-text">대본(SRT/JSON)</span>
+            <div id="srtStatus" class="drop-hint">없음</div>
+          </div>
+        </div>
+        <div class="preview-flex" id="imgPreview"></div>
+      </div>
+
+      <!-- 자막 씬 확인 및 생성 -->
+      <div class="card">
+        <div class="card-title">
+          <span>03</span> 자막 씬 & AI 자동 생성
+          <button class="sd-btn" style="margin-left:auto; padding:6px 12px; font-size:11px;" onclick="generateAllMissingImages()">✨ 부족한 소스 Wan2GP로 전체 생성</button>
+          <button onclick="addScene()" style="background:rgba(124,58,237,0.2); border:1px solid var(--accent2); color:var(--accent2); border-radius:8px; padding:5px 10px; font-size:11px; cursor:pointer; font-weight:700;">+ 씬 추가</button>
+        </div>
+        <div id="sceneEditor" style="max-height:700px; overflow-y:auto; padding-right:4px;">
+          <div style="text-align:center; color:var(--muted); font-size:12px; padding:30px 0;">
+            자막 파일(SRT)을 넣거나 ZIP을 로드하면 씬 목록이 나타납니다.
+          </div>
+        </div>
+      </div>
+
+      <!-- 연출 설정 -->
+      <div class="card">
+        <div class="card-title"><span>04</span> 연출 설정</div>
+        <div class="settings-grid">
+          <div class="setting-vbox">
+            <label>자막 위치</label>
+            <select class="styled-select" id="subPos">
+              <option value="bottom">하단 (안전영역)</option>
+              <option value="middle">중앙</option>
+              <option value="top">상단</option>
+            </select>
+          </div>
+          <div class="setting-vbox">
+            <label>렌더링 품질</label>
+            <select class="styled-select" id="quality">
+              <option value="8000000">고화질 (8Mbps)</option>
+              <option value="4000000">표준 (4Mbps)</option>
+            </select>
+          </div>
+          <div class="setting-vbox">
+            <label>나레이션 속도 (<span id="rateVal">1.0</span>x)</label>
+            <input type="range" id="playbackRate" min="0.8" max="1.5" step="0.05" value="1.0"
+              oninput="document.getElementById('rateVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="setting-vbox">
+            <label>이미지 전환 효과</label>
+            <select class="styled-select" id="transitionType">
+              <option value="cut">컷 (바로 전환)</option>
+              <option value="kenburns">Ken Burns (움직임)</option>
+              <option value="fade">페이드</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 썬네일 드롭존 -->
+      <div class="card">
+        <div class="card-title"><span>05</span> 썬네일 이미지 (선택)</div>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <div class="drop-zone" id="thumbZone" style="flex:1; min-height:80px; padding:16px;">
+            <input type="file" id="thumbInput" class="file-input" accept="image/*">
+            <span style="font-size:20px;">🏷️</span>
+            <span class="drop-text" style="font-size:12px;">썬네일 이미지</span>
+            <div id="thumbStatus" class="drop-hint">첫 번째 이미지 대체 사용</div>
+          </div>
+          <div id="thumbPreview" style="width:80px; height:120px; border-radius:8px; background:#111; border:1px solid var(--border); overflow:hidden; flex-shrink:0;">
+            <img id="thumbImg" src="" style="width:100%; height:100%; object-fit:cover; display:none;">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 우측 렌더러 -->
+    <div class="export-side">
+      <div class="preview-wrapper">
+        <div class="video-preview-box">
+          <div id="previewPlaceholder" style="text-align:center; color:var(--muted)">
+            <div style="font-size:40px; margin-bottom:10px">📱</div>
+            <p style="font-size:12px">STUDIO MONITOR</p>
+          </div>
+          <canvas id="viz" style="display:none"></canvas>
+          <video id="resultVideo" controls style="display:none"></video>
+        </div>
+
+        <button class="render-btn" id="renderBtn" disabled onclick="handleRender()">
+          <span id="btnIcon">⚡</span> <span id="btnText">수작업 영상 렌더링 시작</span>
+        </button>
+
+        <div class="progress-section" id="progressSec">
+          <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; color:var(--muted)">
+            <span id="progStatus">진행 중...</span>
+            <span id="progPct">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-thumb" id="progressThumb"></div></div>
+        </div>
+
+        <div id="downloadSection" style="display:none; width:100%;">
+          <button class="dl-btn" style="background:var(--accent2); border-color:var(--accent2);" onclick="downloadVideo('916')">
+            📱 9:16 세로 영상 다운로드
+          </button>
+          <button class="dl-btn" style="background:var(--accent); border-color:var(--accent);" onclick="downloadVideo('169')">
+            🖥️ 16:9 가로 영상 다운로드
+          </button>
+        </div>
+
+        <div class="log-panel" id="logPanel"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = {
+  images: [],
+  audio: null,
+  thumbnail: null,
+  scenes: [],
+  isRendering: false,
+  blob916: null,
+  blob169: null,
+  sdConnected: false,
+  imagePrompts: [],
+  outDirHandle: null
+};
+
+const UI = {
+  imgInput: document.getElementById("imgInput"),
+  audioInput: document.getElementById("audioInput"),
+  srtInput: document.getElementById("srtInput"),
+  zipInput: document.getElementById("zipInput"),
+  renderBtn: document.getElementById("renderBtn"),
+  viz: document.getElementById("viz"),
+  resVid: document.getElementById("resultVideo"),
+  log: document.getElementById("logPanel"),
+  progSec: document.getElementById("progressSec"),
+  progThumb: document.getElementById("progressThumb"),
+  progPct: document.getElementById("progPct"),
+  progStatus: document.getElementById("progStatus")
+};
+
+function addLog(msg, level='info') {
+  const d = document.createElement('div');
+  d.className = `log-entry ${level}`;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  UI.log.appendChild(d);
+  UI.log.scrollTop = UI.log.scrollHeight;
+}
+
+function initDragDrop() {
+  const setupZone = (id, inputEl, handler) => {
+    const z = document.getElementById(id);
+    z.onclick = () => inputEl.click();
+    z.ondragover = e => { e.preventDefault(); z.classList.add("active"); };
+    z.ondragleave = () => z.classList.remove("active");
+    z.ondrop = e => { e.preventDefault(); z.classList.remove("active"); handler(e.dataTransfer.files); };
+    inputEl.onchange = e => handler(e.target.files);
+  };
+
+  window.selectOutputDirectory = async function() {
+    try {
+      state.outDirHandle = await window.showDirectoryPicker();
+      document.getElementById('dirStatus').textContent = `현재 저장 경로: ${state.outDirHandle.name}`;
+      document.getElementById('dirStatus').style.color = '#fff';
+      addLog(`출력 폴더가 [${state.outDirHandle.name}]로 설정되었습니다. 생성된 이미지는 즉시 저장됩니다!`, 'ok');
+    } catch(e) {
+      addLog(`폴더 선택이 취소되었거나 지원하지 않는 브라우저입니다.`, 'warn');
+    }
+  };
+
+  setupZone("imgZone", UI.imgInput, files => {
+    const newImgs = Array.from(files).filter(f=>f.type.startsWith("image/"));
+    newImgs.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+    handleImages(newImgs);
+  });
+  setupZone("audioZone", UI.audioInput, files => handleAudio(files[0]));
+  setupZone("srtZone", UI.srtInput, files => handleSrtOrJson(files[0]));
+  setupZone("zipZone", UI.zipInput, files => handleZip(files[0]));
+  setupZone("thumbZone", document.getElementById("thumbInput"), files => handleThumbnail(files[0]));
+}
+
+function handleThumbnail(file) {
+  if (!file) return;
+  state.thumbnail = file;
+  const url = URL.createObjectURL(file);
+  const img = document.getElementById('thumbImg');
+  img.src = url;
+  img.style.display = 'block';
+  document.getElementById('thumbStatus').textContent = '✓ ' + file.name;
+  addLog(`썬네일 로드됨: ${file.name}`, 'ok');
+}
+
+// ─── ZIP 로딩 (JSZip) ───
+async function handleZip(file) {
+  if (!file || !file.name.endsWith('.zip')) return;
+  addLog(`ZIP 분석 중: ${file.name}`, 'info');
+  
+  try {
+    const zip = await JSZip.loadAsync(file);
+    let imgBlobs = [], audioBlob = null, srtText = null;
+
+    for (const [path, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      const n = entry.name.toLowerCase();
+      if (n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg')) {
+        const b = await entry.async("blob");
+        b.name = entry.name.split('/').pop();
+        imgBlobs.push(b);
+      } else if (n.endsWith('.mp3') || n.endsWith('.wav')) {
+        audioBlob = await entry.async("blob");
+        audioBlob.name = entry.name.split('/').pop();
+      } else if (n.endsWith('.srt')) {
+        srtText = await entry.async("text");
+      } else if (n.endsWith('.json')) {
+        const jsonText = await entry.async("text");
+        try {
+          const data = JSON.parse(jsonText);
+          const sd = Array.isArray(data) ? data[0] : data;
+          if (sd && sd.image_prompts) state.imagePrompts = sd.image_prompts;
+        } catch(e) {}
+      } else if (n.endsWith('.txt')) {
+        const txt = await entry.async("text");
+        // script.txt 안의 "이미지 프롬프트:" 접두어 작성 줄만 추출
+        const imgPromptLines = txt.split(/\r?\n/)
+          .filter(l => l.includes('이미지 프롬프트:'))
+          .map(l => l.split('이미지 프롬프트:')[1].trim());
+        if (imgPromptLines.length > 0) {
+          state.imagePrompts = imgPromptLines;
+          addLog(`script.txt에서 이미지 프롬프트 ${imgPromptLines.length}개 추출 완료!`, 'ok');
+        } else {
+          // 일반 영문 줄 (json이 없을 때만)
+          const lines = txt.split(/\r?\n/).filter(l => l.trim().length > 5);
+          if (state.imagePrompts.length === 0 && lines.some(l => /^[a-zA-Z]/.test(l))) {
+            state.imagePrompts = lines;
+          }
+        }
+        // SRT가 없으면 나레이션 텍스트 추출
+        if (!srtText) {
+          const narrLines = txt.split(/\r?\n/)
+            .filter(l => l.includes('나레이션:'))
+            .map(l => l.split('나레이션:')[1].trim())
+            .filter(l => l.length > 0);
+          if (narrLines.length > 0 && !state.scenes.length) {
+            // SRT 형식으로 변환
+            let fakeSrt = '';
+            narrLines.forEach((line, i) => {
+              const s = i * 5, e = s + 4.9;
+              fakeSrt += `${i+1}\n${secToSrt(s)} --> ${secToSrt(e)}\n${line}\n\n`;
+            });
+            srtText = fakeSrt;
+            addLog(`script.txt 나레이션 ${narrLines.length}줄 추출 완료!`, 'ok');
+          }
+        }
+      }
+    }
+
+    if (imgBlobs.length > 0) handleImages(imgBlobs);
+    if (audioBlob) handleAudio(audioBlob);
+    if (srtText) await parseSrtContent(srtText);
+    
+    addLog(`ZIP 로드 완료 (이미지 ${imgBlobs.length}, 오디오 ${audioBlob?'O':'X'}, 자막 ${srtText?'O':'X'}, 프롬프트 ${state.imagePrompts.length>0?'O':'X'})`, 'ok');
+    
+    // 이미지가 없고 프롬프트가 있으면 자동 생성 제안
+    if (imgBlobs.length === 0 && state.imagePrompts.length > 0 && state.scenes.length > 0) {
+      if (confirm("ZIP 파일 안에 이미지 프롬프트가 발견되었으나 이미지가 없습니다.\n발견된 프롬프트를 사용하여 즉시 Wan2GP 로컬 이미지를 자동 생성하시겠습니까?")) {
+        generateAllMissingImages(false);
+      }
+    }
+  } catch(e) {
+    addLog(`ZIP 파싱 오류: ${e.message}`, 'err');
+  }
+}
+
+// ─── 파일 핸들러 ───
+function handleImages(files) {
+  files.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+  state.images = files;
+  document.getElementById("imgStatus").textContent = `${files.length}장 로드됨`;
+  const p = document.getElementById("imgPreview"); p.innerHTML="";
+  files.forEach(f => {
+    const d = document.createElement("div"); d.className="preview-item";
+    d.style.backgroundImage = `url(${URL.createObjectURL(f)})`;
+    p.appendChild(d);
+  });
+  checkReady();
+}
+
+function handleAudio(file) {
+  if (!file) return;
+  state.audio = file;
+  document.getElementById("audioStatus").textContent = "✓ " + file.name;
+  checkReady();
+}
+
+function handleSrtOrJson(file) {
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = async e => {
+    if (file.name.endsWith('.json')) {
+      try {
+        const data = JSON.parse(e.target.result);
+        const sd = Array.isArray(data) ? data[0] : data;
+        if (sd && sd.image_prompts) {
+          state.imagePrompts = sd.image_prompts;
+          document.getElementById("srtStatus").textContent = `✓ 프롬프트 연결됨`;
+          addLog("JSON 영문 프롬프트 파싱 완료", "ok");
+        }
+      } catch(err) { addLog("JSON 파싱 오류", "err"); }
+    } else {
+      await parseSrtContent(e.target.result);
+    }
+  };
+  r.readAsText(file);
+}
+
+function secToSrt(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const ms = Math.round((sec - Math.floor(sec)) * 1000);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+}
+
+function parseSrtTime(t) {
+  if(!t) return 0;
+  const parts = t.split(':');
+  if(parts.length < 3) return 0;
+  const h = parseInt(parts[0]), m = parseInt(parts[1]);
+  const sParts = parts[2].split(',');
+  const s = parseInt(sParts[0]), ms = parseInt(sParts[1]||0);
+  return h*3600 + m*60 + s + ms/1000;
+}
+
+async function translateKoToEn(text) {
+  try {
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`);
+    const data = await res.json();
+    return data[0].map(item => item[0]).join("");
+  } catch(e) {
+    return text;
+  }
+}
+
+async function parseSrtContent(text) {
+  const blocks = text.split(/\r?\n\r?\n/).filter(b => b.trim());
+  state.scenes = blocks.map(b => {
+    const lines = b.split(/\r?\n/).filter(l => l.trim());
+    let start = null, end = null;
+    if (lines[1] && lines[1].includes('-->')) {
+      const [s, en] = lines[1].split('-->').map(t => t.trim());
+      start = parseSrtTime(s); end = parseSrtTime(en);
+    }
+    return { text: lines.slice(2).join(" "), start, end };
+  });
+  
+  // 영문 프롬프트 자동 번역 (JSON에서 누락된 경우)
+  if (state.imagePrompts.length < state.scenes.length) {
+    addLog("영문 프롬프트가 부족하여 자막 기반으로 자동 번역을 수행합니다...", "info");
+    for (let i = 0; i < state.scenes.length; i++) {
+      if (!state.imagePrompts[i] || /^[ㄱ-ㅎ가-힣]+$/.test(state.imagePrompts[i].replace(/\s/g, ''))) {
+        const enText = await translateKoToEn(state.scenes[i].text);
+        state.imagePrompts[i] = enText;
+      }
+    }
+    addLog("구글 번역기를 통한 영문 프롬프트 자동 생성 완료!", "ok");
+  }
+
+  document.getElementById("srtStatus").textContent = `✓ ${state.scenes.length}씬`;
+  renderSceneEditor();
+  checkReady();
+}
+
+function renderSceneEditor() {
+  const ed = document.getElementById('sceneEditor');
+  ed.innerHTML = '';
+  if (state.scenes.length === 0) {
+    ed.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:12px; padding:30px 0;">자막 파일(SRT)을 넣거나 ZIP을 로드하면 씬 목록이 나타납니다.</div>`;
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'scene-grid';
+
+  state.scenes.forEach((sc, i) => {
+    const imgBlob = state.images[i];
+    const promptVal = (state.imagePrompts && state.imagePrompts[i]) ? state.imagePrompts[i] : sc.text;
+    const thumbSrc = imgBlob ? URL.createObjectURL(imgBlob) : null;
+
+    const card = document.createElement('div');
+    card.className = 'scene-img-card';
+    card.id = `scene-card-${i}`;
+
+    card.innerHTML = `
+      ${thumbSrc
+        ? `<img class="card-thumb" src="${thumbSrc}" alt="S${i+1}" onclick="openSceneLightbox(${i})" title="클릭하면 크게 봅니다">`
+        : `<div class="card-thumb-empty">🎬</div>`}
+      <div class="card-body">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="card-scene-num">S${String(i+1).padStart(2,'0')}</span>
+          ${imgBlob ? '<span style="font-size:9px; color:var(--success);">✅ 생성됨</span>' : '<span style="font-size:9px; color:var(--muted);">⬜ 없음</span>'}
+        </div>
+        <div class="card-narr">${sc.text}</div>
+        <textarea class="card-prompt" id="prompt-${i}" oninput="state.imagePrompts[${i}]=this.value">${promptVal}</textarea>
+        <div class="card-actions">
+          <button class="btn-regen" onclick="regenSceneImage(${i})">✨ 재생성</button>
+          ${thumbSrc ? `<button class="btn-zoom" onclick="openSceneLightbox(${i})">🔍 크게 보기</button>` : ''}
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  ed.appendChild(grid);
+}
+
+function checkReady() {
+  UI.renderBtn.disabled = !(state.images.length > 0 && state.audio && state.scenes.length > 0);
+}
+
+// ─── Wan2GP Local API ───
+async function connectSD() {
+  const url = document.getElementById('sd-url').value.trim().replace(/\/$/, '');
+  addLog(`Wan2GP API 연결 시도: ${url}`, 'info');
+  try {
+    const res = await fetch(`${url}/api/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: ['connection test', '1.3B', 'Default', 256, 256] })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state.sdConnected = true;
+    addLog(`Wan2GP 연결 성공! 이미지 생성이 가능합니다.`, 'ok');
+  } catch(e) {
+    addLog(`Wan2GP API 연결 실패: ${e.message}`, 'err');
+    state.sdConnected = false;
+  }
+}
+
+async function regenSceneImage(idx) {
+  const ta = document.getElementById(`prompt-${idx}`);
+  if (ta) state.imagePrompts[idx] = ta.value;
+  await generateSceneImage(idx);
+}
+
+function openSceneLightbox(idx) {
+  const blob = state.images[idx];
+  if (!blob) return;
+  document.getElementById('lbImg').src = URL.createObjectURL(blob);
+  document.getElementById('lbTitle').textContent = `S${String(idx+1).padStart(2,'0')} — ${state.scenes[idx] ? state.scenes[idx].text : ''}`;
+  document.getElementById('lbPrompt').textContent = (state.imagePrompts && state.imagePrompts[idx]) ? state.imagePrompts[idx] : '';
+  document.getElementById('sceneLightbox').classList.add('vis');
+}
+
+function closeSceneLightbox() {
+  document.getElementById('sceneLightbox').classList.remove('vis');
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSceneLightbox(); });
+
+async function generateSceneImage(idx) {
+  if (!state.sdConnected) { alert("먼저 Wan2GP 연결 확인을 눌러주세요!"); return; }
+
+  const url = document.getElementById('sd-url').value.trim().replace(/\/$/, '');
+
+  // JSON 파일에 영문 프롬프트가 있으면 그것을 우선 사용, 없으면 한글 대사 사용
+  let basePrompt = state.imagePrompts && state.imagePrompts[idx] ? state.imagePrompts[idx] : state.scenes[idx].text;
+  const prompt = basePrompt + ", masterpiece, best quality, highly detailed, realistic photo, cinematic, no text, no watermark";
+
+  const model = document.getElementById('sd-model').value;
+  const width = parseInt(document.getElementById('sd-width').value);
+  const height = parseInt(document.getElementById('sd-height').value);
+
+  addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP ${model})`, 'info');
+
+  try {
+    const res = await fetch(`${url}/api/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [prompt, model, 'Default', width, height] })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.data || !data.data[0]) throw new Error("응답에 이미지가 없습니다");
+    let base64 = data.data[0];
+    if (typeof base64 === 'string' && base64.startsWith('data:')) {
+      base64 = base64.split(',')[1];
+    }
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], {type: 'image/png'});
+    const fileName = `gen_scene_${String(idx+1).padStart(2,'0')}.png`;
+    blob.name = fileName;
+
+    // 파일 시스템(E:\Wan2GP 등)에 자동 저장 로직
+    if (state.outDirHandle) {
+      try {
+        const fileHandle = await state.outDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        addLog(`S${idx+1} 이미지 로컬 폴더에 자동 저장 완료: ${fileName}`, 'ok');
+      } catch(err) {
+        addLog(`로컬 파일 저장 실패: ${err.message}`, 'err');
+      }
+    }
+
+    // 이미지 리스트 업데이트
+    state.images[idx] = blob;
+    handleImages(state.images);
+    renderSceneEditor();
+    addLog(`S${idx+1} 이미지 생성 완료!`, 'ok');
+  } catch(e) {
+    addLog(`이미지 생성 실패: ${e.message}`, 'err');
+  }
+}
+
+async function generateAllMissingImages(forceAll = false) {
+  if (!state.sdConnected) { alert("Wan2GP 연결이 필요합니다."); return; }
+  let startIdx = forceAll ? 0 : state.images.length;
+  for (let i = startIdx; i < state.scenes.length; i++) {
+    await generateSceneImage(i);
+  }
+  if(forceAll) addLog("레퍼런스 기반 씬 전체 이미지 생성이 완료되었습니다!", "ok");
+}
+
+// ─── 앉 추가 ───
+function addScene() {
+  state.scenes.push({ text: '새 쒜 내용을 입력하세요', start: null, end: null });
+  state.imagePrompts.push('');
+  renderSceneEditor();
+  addLog('씼 추가됨 (SRT 파일에는 반영되지 않음)', 'info');
+}
+
+// ─── 비디오 렌더링 (WebM) ───
+async function handleRender() {
+  if (state.isRendering || !state.audio) return;
+  state.isRendering = true;
+  UI.renderBtn.disabled = true;
+  UI.progSec.classList.add('visible');
+  document.getElementById('previewPlaceholder').style.display = 'none';
+  UI.viz.style.display = 'block';
+
+  try {
+    addLog("오디오 디코딩 중...", "info");
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await state.audio.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const playbackRate = parseFloat(document.getElementById('playbackRate')?.value || 1.0);
+
+    const images = await Promise.all(state.images.map(file => {
+      return new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.src = URL.createObjectURL(file);
+      });
+    }));
+
+    // 썬네일 로드
+    let thumbImgEl = null;
+    if (state.thumbnail) {
+      thumbImgEl = await new Promise(res => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.src = URL.createObjectURL(state.thumbnail);
+      });
+    }
+
+    addLog('▶ 9:16 세로 영상 렌더링...', 'info');
+    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, audioCtx, W: 1080, H: 1920, label: '916', playbackRate });
+
+    addLog('▶ 16:9 가로 영상 렌더링...', 'info');
+    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, audioCtx, W: 1920, H: 1080, label: '169', playbackRate });
+
+    UI.resVid.src = URL.createObjectURL(state.blob916);
+    UI.resVid.style.display = 'block';
+    UI.viz.style.display = 'none';
+    document.getElementById('downloadSection').style.display = 'block';
+    addLog('✅ 수작업 영상 제작 완료!', 'ok');
+
+  } catch(err) {
+    addLog("오류: " + err.message, "err");
+  } finally {
+    state.isRendering = false;
+    UI.renderBtn.disabled = false;
+  }
+}
+
+async function startProduction({ scenes, images, thumbImg, audioBuffer, audioCtx, W, H, label, playbackRate = 1.0 }) {
+  const allImages = thumbImg ? [thumbImg, ...images] : images;
+  return new Promise((resolve) => {
+    UI.viz.width = W; UI.viz.height = H;
+    const ctx = UI.viz.getContext('2d');
+    const totalDuration = audioBuffer.duration / playbackRate;
+    const fps = 30;
+    const totalFrames = Math.ceil(totalDuration * fps);
+    const transition = document.getElementById('transitionType')?.value || 'cut';
+    const bitrate = parseInt(document.getElementById('quality')?.value || '8000000');
+
+    let chunks = [];
+    const stream = UI.viz.captureStream(fps);
+    const dest = audioCtx.createMediaStreamDestination();
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.playbackRate.value = playbackRate;
+    source.connect(dest);
+    
+    const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      if (label === '916') state.blob916 = blob; else state.blob169 = blob;
+      resolve();
+    };
+
+    recorder.start();
+    source.start();
+
+    let frame = 0;
+    function render() {
+      if (frame >= totalFrames) { recorder.stop(); source.stop(); return; }
+      const progress = frame / totalFrames;
+      UI.progThumb.style.width = (progress * 100) + '%';
+      UI.progPct.textContent = Math.floor(progress * 100) + '%';
+      UI.progStatus.textContent = `${label} 렌더링 중...`;
+
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+
+      // 이미지 인덱스 + 씬 내부 진행도
+      const imgIdx = Math.min(Math.floor(progress * allImages.length), allImages.length - 1);
+      const img = allImages[imgIdx];
+      const imgDur = totalDuration / allImages.length;
+      const imgLocalProgress = Math.min(((progress * totalDuration) - imgIdx * imgDur) / imgDur, 1);
+
+      if (img) {
+        if (transition === 'kenburns') {
+          // Ken Burns: 이미지마다 방향 교대로 팬/줌
+          const zoom = 1.0 + imgLocalProgress * 0.08;
+          const dw = W * zoom, dh = H * zoom;
+          const kbType = imgIdx % 3;
+          let ox = 0, oy = 0;
+          if (kbType === 0) { ox = (W - dw) * imgLocalProgress; oy = (H - dh) * imgLocalProgress; }
+          else if (kbType === 1) { ox = (W - dw) * (1 - imgLocalProgress); oy = (H - dh) * imgLocalProgress; }
+          else { ox = (W - dw) / 2; oy = (H - dh) * imgLocalProgress; }
+          ctx.drawImage(img, ox, oy, dw, dh);
+        } else if (transition === 'fade') {
+          ctx.drawImage(img, 0, 0, W, H);
+          if (imgLocalProgress > 0.8 && imgIdx + 1 < allImages.length) {
+            const alpha = (imgLocalProgress - 0.8) / 0.2;
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(allImages[imgIdx + 1], 0, 0, W, H);
+            ctx.globalAlpha = 1.0;
+          }
+        } else {
+          ctx.drawImage(img, 0, 0, W, H);
+        }
+      }
+
+      // 자막: SRT 실제 시간 기반
+      const currentTime = frame / fps;
+      let currentScene = null;
+      for (let i = 0; i < scenes.length; i++) {
+        if (scenes[i].start !== null && currentTime >= scenes[i].start && currentTime <= scenes[i].end) {
+          currentScene = scenes[i]; break;
+        } else if (scenes[i].start === null) {
+          const sDur = totalDuration / Math.max(1, scenes.length);
+          if (currentTime >= i*sDur && currentTime < (i+1)*sDur) { currentScene = scenes[i]; break; }
+        }
+      }
+
+      if (currentScene) {
+        const subPos = document.getElementById('subPos')?.value || 'bottom';
+        const subY = subPos === 'top' ? H*0.12 : subPos === 'middle' ? H*0.5 : H*0.84;
+        const fontSize = W > 1000 ? 68 : 48;
+        
+        ctx.font = `bold ${fontSize}px "Outfit", "Noto Sans KR", sans-serif`;
+        const tw = ctx.measureText(currentScene.text).width;
+        const pad = 28;
+        // 자막 배경 라운드 박스
+        ctx.fillStyle = 'rgba(0,0,0,0.58)';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(W/2 - tw/2 - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38, 14);
+        } else {
+          ctx.rect(W/2 - tw/2 - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38);
+        }
+        ctx.fill();
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 12;
+        ctx.strokeText(currentScene.text, W/2, subY);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(currentScene.text, W/2, subY);
+      }
+
+      frame++;
+      requestAnimationFrame(render);
+    }
+    render();
+  });
+}
+
+function downloadVideo(ratio) {
+  const blob = ratio === '916' ? state.blob916 : state.blob169;
+  if (!blob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ShortsForge_${ratio}_${Date.now()}.webm`;
+  a.click();
+}
+
+initDragDrop();
+</script>
+</body>
+</html>
