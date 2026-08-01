@@ -757,9 +757,10 @@ function wanBuildData(config, dep, overrides) {
   inputs.forEach((id, idx) => {
     const comp = wanComponentById(config, id);
     const label = (comp && comp.props && comp.props.label ? comp.props.label : '').toLowerCase();
-    // number 타입 컴포넌트인데 /config 기본값이 문자열 숫자로 내려오는 경우가 있어
-    // (예: repeat_generation), 서버 쪽 산술 연산(str+int)이 깨지지 않도록 실제 숫자로 변환
-    if (comp && comp.type === 'number' && typeof data[idx] === 'string' && /^-?\d+(\.\d+)?$/.test(data[idx])) {
+    // /config 기본값이 숫자처럼 생긴 문자열로 내려오는 컴포넌트가 있어(예: repeat_generation,
+    // 슬라이더/숫자 조합형 컴포넌트라 type이 'number'가 아닐 수 있음), 서버 쪽 산술 연산
+    // (str+int)이 깨지지 않도록 컴포넌트 타입과 상관없이 순수 숫자 문자열은 실제 숫자로 변환
+    if (typeof data[idx] === 'string' && /^-?\d+(\.\d+)?$/.test(data[idx])) {
       data[idx] = Number(data[idx]);
     }
     if (!label) return;
