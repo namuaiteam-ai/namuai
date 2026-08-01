@@ -743,8 +743,18 @@ function wanBuildData(config, dep, overrides) {
     const comp = wanComponentById(config, id);
     const label = (comp && comp.props && comp.props.label ? comp.props.label : '').toLowerCase();
     if (!label) return;
+    const choices = comp && comp.props && Array.isArray(comp.props.choices) ? comp.props.choices : null;
     for (const key in overrides) {
-      if (label.includes(key)) data[idx] = overrides[key];
+      if (!label.includes(key)) continue;
+      const val = overrides[key];
+      if (choices) {
+        // 드롭다운/라디오처럼 정해진 선택지가 있는 컴포넌트는, 우리 값이 실제 선택지 목록에
+        // 있을 때만 덮어씀 (라벨에 우연히 같은 단어가 들어간 다른 컴포넌트를 잘못 건드리지 않기 위함)
+        const choiceValues = choices.map(c => Array.isArray(c) ? c[1] : c);
+        if (choiceValues.includes(val)) data[idx] = val;
+      } else {
+        data[idx] = val;
+      }
     }
   });
   return data;
