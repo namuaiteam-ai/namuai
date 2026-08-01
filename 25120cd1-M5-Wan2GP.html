@@ -1014,23 +1014,48 @@ async function wanFetchImageBlob(baseUrl, imgInfo) {
 // process_prompt_and_add_tasks(state, current_gallery_tab, model_choice) 시그니처가 고정이므로
 // inputs[0]=state 컴포넌트 id, inputs[2]=model_choice(모델 선택 드롭다운) 컴포넌트 id로 확정 가능.
 // 그 드롭다운의 실제 choices를 읽어와 우리 UI의 모델 선택창을 채움 (추측 없이 실제 값 그대로).
+// process_prompt_and_add_tasks 3번째 입력이 model_choice일 거라 가정했지만 실제로는
+// 다른(LoRA 프리셋) 드롭다운이었음. 위치 추측 대신, "실제 모델 이름은 대부분 파라미터
+// 수(예: 8.9B, 14B)를 포함한다"는 특징으로 진짜 모델 드롭다운을 찾음.
+const WAN_MODEL_NAME_HINT = /\d+(\.\d+)?B\b/;
+
+function wanFindModelChoiceComponent(config) {
+  const comps = config.components || [];
+  let best = null;
+  for (const c of comps) {
+    if (!c.props || !Array.isArray(c.props.choices)) continue;
+    const texts = c.props.choices.map(ch => String(Array.isArray(ch) ? ch[0] : ch));
+    const hits = texts.filter(t => WAN_MODEL_NAME_HINT.test(t)).length;
+    if (hits > 0 && (!best || hits > best.hits)) best = { comp: c, hits };
+  }
+  return best ? best.comp : null;
+}
+
+function wanFindStateComponent(config, dep) {
+  const inputs = dep.inputs || [];
+  for (const id of inputs) {
+    const c = wanComponentById(config, id);
+    if (c && c.type === 'state') return id;
+  }
+  return inputs[0]; // 못 찾으면 기존 가정(첫 인자)으로 폴백
+}
+
 function wanPopulateModelDropdown(config) {
   const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
-  const stateCompId = add.dep.inputs[0];
-  const modelChoiceCompId = add.dep.inputs[2];
-  WAN.stateCompId = stateCompId;
-  WAN.modelChoiceCompId = modelChoiceCompId;
+  WAN.stateCompId = wanFindStateComponent(config, add.dep);
 
-  const modelComp = wanComponentById(config, modelChoiceCompId);
-  const choices = (modelComp && modelComp.props && Array.isArray(modelComp.props.choices)) ? modelComp.props.choices : [];
-  const currentValue = modelComp && modelComp.props ? modelComp.props.value : null;
-
+  const modelComp = wanFindModelChoiceComponent(config);
   const sel = document.getElementById('sd-model');
   sel.innerHTML = '';
-  if (!choices.length) {
-    sel.innerHTML = '<option value="">모델 목록을 가져오지 못함</option>';
+  if (!modelComp) {
+    sel.innerHTML = '<option value="">실제 모델 드롭다운을 찾지 못함</option>';
+    WAN.modelChoiceCompId = null;
     return;
   }
+  WAN.modelChoiceCompId = modelComp.id;
+
+  const choices = modelComp.props.choices;
+  const currentValue = modelComp.props.value;
   choices.forEach(c => {
     const label = Array.isArray(c) ? c[0] : c;
     const value = Array.isArray(c) ? c[1] : c;
