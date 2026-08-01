@@ -874,6 +874,9 @@ async function wanEnsureSession(url, sessionHash) {
       const es = await wanOpenQueueStream(url, prefix, sessionHash);
       WAN.queueStream = es;
       WAN.prefix = prefix;
+      // 스트림이 열린 직후 서버가 세션을 완전히 등록하기 전에 첫 요청이 도착하는
+      // 레이스 컨디션을 피하기 위해 짧게 대기
+      await new Promise(r => setTimeout(r, 500));
       return;
     } catch(e) {
       lastErr = e;
@@ -884,8 +887,21 @@ async function wanEnsureSession(url, sessionHash) {
 
 // POST /queue/join 으로 fn_index 호출을 큐에 넣고, 열려있는 /queue/data 스트림에서
 // 그 결과(process_completed)가 올 때까지 기다림. WanGP는 세션당 순차 처리이므로 FIFO로 매칭.
-async function wanCall(url, fnIndex, data, sessionHash) {
+// "Session not found"를 만나면(세션 등록 타이밍 이슈) 한 번 더 기다렸다가 자동 재시도.
+async function wanCall(url, fnIndex, data, sessionHash, _retried) {
   await wanEnsureSession(url, sessionHash);
+  try {
+    return await wanCallOnce(url, fnIndex, data, sessionHash);
+  } catch(e) {
+    if (!_retried && /session not found/i.test(e.message || '')) {
+      await new Promise(r => setTimeout(r, 800));
+      return await wanCall(url, fnIndex, data, sessionHash, true);
+    }
+    throw e;
+  }
+}
+
+async function wanCallOnce(url, fnIndex, data, sessionHash) {
   return await new Promise((resolvePromise, rejectPromise) => {
     let timeoutId;
     const waiter = {
