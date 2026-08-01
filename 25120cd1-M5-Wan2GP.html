@@ -765,13 +765,26 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
+// Gradio는 "값은 안 바꾸고 다른 속성만 갱신"할 때 {__type__:'update', ...} 형태를 돌려주는데,
+// 여기 value 키가 없으면 실제 값이 아니라 부분 갱신 표시일 뿐이므로 저장하면 안 됨(다음 호출에
+// 잘못된 값으로 끼워 넣게 됨 - 실제로 Gallery 값 자리에 이 객체가 들어가 검증 에러가 남).
+function wanUnwrapUpdate(v) {
+  if (v && typeof v === 'object' && v.__type__ === 'update') {
+    if (Object.prototype.hasOwnProperty.call(v, 'value')) return { has: true, value: v.value };
+    return { has: false };
+  }
+  return { has: true, value: v };
+}
+
 // dep의 outputs(컴포넌트 id 목록)와 실제 반환값을 짝지어 WAN.componentValues에 저장.
 // 다음 호출에서 같은 컴포넌트(특히 gr.State)를 입력으로 쓸 때 최신 값을 이어받기 위함.
 function wanRecordOutputs(dep, output) {
   const outputs = dep.outputs || [];
   if (!Array.isArray(output)) return;
   outputs.forEach((id, i) => {
-    if (i < output.length) WAN.componentValues[id] = output[i];
+    if (i >= output.length) return;
+    const unwrapped = wanUnwrapUpdate(output[i]);
+    if (unwrapped.has) WAN.componentValues[id] = unwrapped.value;
   });
 }
 
