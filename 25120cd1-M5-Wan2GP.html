@@ -1196,6 +1196,17 @@ async function generateSceneImage(idx) {
     const save = wanFindDependency(config, 'save_inputs');
     const saveData = wanBuildData(config, save.dep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
     saveData[0] = 'state';
+    // 진단용: 숫자처럼 생겼는데 여전히 문자열인 값이 남아있는지 전부 찾아서 인덱스/라벨과 함께 로그.
+    // (숫자 변환이 실제로 다 걸렸는지, 아니면 다른 원인인지 다음 라운드에 바로 알 수 있게)
+    const suspects = [];
+    saveData.forEach((v, i) => {
+      if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+        const compId = save.dep.inputs[i];
+        const comp = wanComponentById(config, compId);
+        suspects.push(`idx${i}(id=${compId},type=${comp ? comp.type : '?'},label=${comp && comp.props ? comp.props.label : '?'})="${v}"`);
+      }
+    });
+    addLog(`save_inputs 데이터 진단: 아직 문자열인 숫자값 ${suspects.length}개 - ${suspects.join('; ') || '없음'}`, 'info');
     const saveOutput = await wanCall(url, save.index, saveData, sessionHash);
     wanRecordOutputs(save.dep, saveOutput);
 
