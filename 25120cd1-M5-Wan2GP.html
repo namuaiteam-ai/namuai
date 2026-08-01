@@ -825,6 +825,22 @@ async function wanTriggerLoadEvents(url, config, sessionHash) {
   }
 }
 
+// 실제 화면에서는 모델을 선택/화면을 열 때 이런 함수들이 자동 실행되며 state 안의
+// model_type 등을 세팅함. 존재하면(버전에 따라 없을 수 있음) 기본값 그대로 한 번 호출해서
+// 우리 세션에도 같은 초기화를 시켜줌 (없으면 조용히 건너뜀).
+async function wanTriggerIfExists(url, config, sessionHash, apiName) {
+  const key = 'triggered_' + apiName;
+  if (WAN[key]) return;
+  WAN[key] = true;
+  if (!(config.dependencies || []).some(d => d.api_name === apiName)) return;
+  const found = wanFindDependency(config, apiName);
+  try {
+    await wanCallDep(url, config, found.dep, found.index, sessionHash, {});
+  } catch(e) {
+    addLog(`${apiName} 호출 실패, 계속 진행: ${e.message}`, 'info');
+  }
+}
+
 // 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
 function wanQueueDispatch(msg) {
   if (msg.msg === 'process_completed') {
@@ -1040,6 +1056,8 @@ async function generateSceneImage(idx) {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
     await wanTriggerLoadEvents(url, config, sessionHash);
+    await wanTriggerIfExists(url, config, sessionHash, 'change_model_family_target');
+    await wanTriggerIfExists(url, config, sessionHash, 'track_template_selection');
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
     const save = wanFindDependency(config, 'save_inputs');
