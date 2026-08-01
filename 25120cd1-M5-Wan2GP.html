@@ -1059,7 +1059,10 @@ async function generateSceneImage(idx) {
   try {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
-    await wanTriggerLoadEvents(url, config, sessionHash);
+    // load 이벤트 호출은 세션 등록 실패("Session not found")를 해결하려던 것이었는데,
+    // 이제 wanCall 자체에 재시도 로직이 있어 불필요할 뿐 아니라, 이 호출의 출력값이
+    // state의 model_type 기본값을 오염시켜 "Webform..." 에러를 유발하는 것으로 보여 비활성화.
+    // await wanTriggerLoadEvents(url, config, sessionHash);
     await wanEnsureModelState(url, config, sessionHash);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
