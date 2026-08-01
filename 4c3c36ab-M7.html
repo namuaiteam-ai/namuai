@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShortsForge Ultra M7</title>
+<script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+:root{--bg:#030305;--surface:rgba(18,18,26,0.8);--surface-solid:#12121a;--surface-light:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.08);--accent:#ff6b35;--accent-glow:rgba(255,107,53,0.3);--accent2:#7c3aed;--accent2-glow:rgba(124,58,237,0.3);--text:#f8f9fa;--muted:#8e919e;--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--glass:blur(16px) saturate(180%);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Outfit','Noto Sans KR',sans-serif;min-height:100vh;overflow-x:hidden;line-height:1.6;}
+.bg-glow{position:fixed;top:-10%;left:-10%;width:40%;height:40%;background:radial-gradient(circle,var(--accent2-glow) 0%,transparent 70%);z-index:-1;filter:blur(100px);animation:drift 20s infinite alternate;}
+.bg-glow-2{position:fixed;bottom:-10%;right:-10%;width:45%;height:45%;background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%);z-index:-1;filter:blur(100px);animation:drift 25s infinite alternate-reverse;}
+@keyframes drift{from{transform:translate(0,0)}to{transform:translate(10%,10%)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.app{position:relative;max-width:1200px;margin:0 auto;padding:60px 24px;display:flex;flex-direction:column;gap:40px;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;}
+.logo-group{display:flex;align-items:center;gap:20px;}
+.logo-box{width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 10px 30px var(--accent-glow);position:relative;overflow:hidden;}
+.logo-box::after{content:'';position:absolute;width:100%;height:100%;background:linear-gradient(rgba(255,255,255,0.2),transparent);top:0;left:0;}
+.logo-text h1{font-size:36px;font-weight:800;letter-spacing:-1.5px;background:linear-gradient(to right,#fff,var(--muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-text p{font-size:14px;color:var(--muted);font-weight:300;text-transform:uppercase;letter-spacing:2px;}
+.method-badge{padding:8px 16px;background:var(--surface-light);border:1px solid var(--border);border-radius:30px;font-size:12px;display:flex;align-items:center;gap:8px;}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);}
+.zip-banner{background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(124,58,237,0.1));border:1px solid rgba(16,185,129,0.35);border-radius:20px;padding:16px 24px;display:flex;align-items:center;gap:16px;}
+.zip-zone{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(16,185,129,0.1);color:var(--success);border:1.5px dashed var(--success);cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s;white-space:nowrap;}
+.zip-zone:hover{background:rgba(16,185,129,0.2);}
+.kit-tag{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(16,185,129,0.15);color:var(--success);border:1px solid rgba(16,185,129,0.3);}
+.kit-tag.sd{background:rgba(124,58,237,0.15);color:#a78bfa;border-color:rgba(124,58,237,0.3);}
+.main-grid{display:grid;grid-template-columns:1fr 380px;gap:32px;}
+.card{background:var(--surface);backdrop-filter:var(--glass);border:1px solid var(--border);border-radius:24px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,0.3);}
+.card-title{font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+.sd-section{background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.25);border-radius:16px;padding:18px 20px;margin-bottom:20px;}
+.sd-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.sd-title{font-size:13px;font-weight:700;color:#a78bfa;}
+.sd-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.sd-status{margin-left:auto;font-size:11px;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.sd-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.sd-row label{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;min-width:60px;}
+.drop-zone{border:2px dashed var(--border);border-radius:20px;padding:40px 20px;text-align:center;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);background:rgba(255,255,255,0.02);cursor:pointer;position:relative;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.drop-zone:hover{border-color:var(--accent2);background:rgba(124,58,237,0.05);}
+.drop-zone.active{border-color:var(--accent);background:rgba(255,107,53,0.08);transform:scale(0.99);}
+.drop-zone.loaded{border-color:var(--success);border-style:solid;background:rgba(16,185,129,0.05);}
+.drop-icon{font-size:40px;margin-bottom:12px;display:block;}
+.drop-text{font-size:14px;font-weight:600;color:var(--text);}
+.drop-hint{font-size:12px;color:var(--muted);margin-top:4px;}
+.file-input{display:none;}
+.image-preview-flex{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;justify-content:center;}
+.preview-item{width:60px;height:60px;border-radius:10px;background-size:cover;background-position:center;border:2px solid var(--border);position:relative;margin-bottom:25px;}
+.settings-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px;}
+.setting-vbox{display:flex;flex-direction:column;gap:12px;}
+.setting-vbox label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;}
+.styled-select,.styled-input{background:var(--surface-light);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px;font-size:14px;width:100%;outline:none;}
+.scene-card{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:10px 12px;}
+.scene-num{font-size:11px;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace;min-width:28px;}
+.scene-input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:14px;}
+.scene-time{font-size:10px;color:var(--muted);white-space:nowrap;font-family:'JetBrains Mono',monospace;}
+.scene-img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+.scard{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;overflow:visible;}
+.sthumb{width:100%;aspect-ratio:9/16;background:#111;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.sthumb img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;}
+.sph{font-size:26px;color:var(--muted);}
+.sinfo{padding:10px 12px;}
+.slabel{font-size:10px;font-weight:700;color:#a78bfa;font-family:'JetBrains Mono',monospace;margin-bottom:4px;}
+.sprompt{font-size:10px;color:var(--muted);line-height:1.4;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.sbtn{width:100%;padding:6px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.4);color:#a78bfa;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;}
+.sbtn:hover:not(:disabled){background:var(--accent2);color:white;}
+.sbtn:disabled{opacity:.4;cursor:not-allowed;}
+.sbtn.loading{border-color:var(--accent);color:var(--accent);animation:pulse 1s infinite;}
+.sbtn.done{border-color:var(--success);color:var(--success);background:rgba(16,185,129,0.1);}
+.sprog{font-size:10px;color:var(--muted);margin-top:4px;min-height:14px;display:flex;align-items:center;gap:4px;}
+.sprogspn{width:8px;height:8px;border:1.5px solid var(--border);border-top-color:var(--accent2);border-radius:50%;display:none;}
+.sprogspn.on{display:block;animation:spin .7s linear infinite;}
+.gen-all-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent2),var(--accent));border:none;border-radius:14px;color:white;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:12px;transition:all .3s;box-shadow:0 8px 30px rgba(124,58,237,0.3);}
+.gen-all-btn:hover{opacity:.88;transform:translateY(-1px);}
+.gen-all-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.gen-progress{font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px;min-height:18px;}
+.ref-zone{border:2px dashed rgba(124,58,237,0.4);border-radius:14px;padding:14px;text-align:center;cursor:pointer;transition:all .3s;background:rgba(124,58,237,0.04);min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;margin-top:10px;}
+.ref-zone:hover{border-color:var(--accent2);background:rgba(124,58,237,0.1);}
+.ref-zone.has-img{border-style:solid;border-color:var(--accent2);}
+.ref-zone img{max-height:100px;border-radius:8px;object-fit:contain;}
+.preview-wrapper{position:sticky;top:60px;display:flex;flex-direction:column;gap:16px;align-items:center;}
+.video-preview-box{width:100%;max-width:320px;aspect-ratio:9/16;background:#000;border-radius:20px;overflow:hidden;position:relative;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;}
+.video-preview-box video{width:100%;height:100%;object-fit:cover;}
+.render-btn{width:100%;padding:20px;border:none;border-radius:20px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-size:18px;font-weight:800;cursor:pointer;transition:all .3s;box-shadow:0 10px 40px rgba(124,58,237,0.3);display:flex;align-items:center;justify-content:center;gap:12px;}
+.render-btn:disabled{opacity:.4;cursor:not-allowed;}
+.progress-section{margin-top:10px;display:none;width:100%;}
+.progress-section.visible{display:block;}
+.progress-track{height:8px;background:var(--surface-light);border-radius:4px;overflow:hidden;}
+.progress-thumb{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .3s;}
+.log-panel{margin-top:16px;background:rgba(0,0,0,0.5);border-radius:12px;padding:12px;height:120px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#a5f3fc;display:none;line-height:1.6;width:100%;}
+.log-panel.visible{display:block;}
+.log-entry.ok{color:#4ade80;}.log-entry.info{color:#60a5fa;}.log-entry.err{color:#f87171;}
+.color-row{display:flex;gap:6px;}
+.color-btn{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:all .2s;}
+.color-btn.active{border-color:white;transform:scale(1.2);}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+<div class="app">
+<header>
+  <div class="logo-group">
+    <div class="logo-box">🎥</div>
+    <div class="logo-text">
+      <h1>ShortsForge <span style="font-weight:300;opacity:.6;">Ultra Studio</span></h1>
+      <p>M7.html — Wan2GP 로컬 AI + ZIP 자동로드</p>
+    </div>
+  </div>
+  <div class="method-badge"><div class="status-dot"></div>Wan2GP Text to Image 모드</div>
+</header>
+<div class="zip-banner">
+  <div style="font-size:24px;">📦</div>
+  <div>
+    <div style="font-size:13px;font-weight:700;color:var(--success);margin-bottom:2px;">ZIP 파일을 드래그하면 자동 로드됩니다</div>
+    <div style="font-size:11px;color:var(--muted);">MP3 · SRT · 이미지 프롬프트 자동 적용</div>
+  </div>
+  <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;align-items:center;">
+    <div class="zip-zone" id="zipZone" onclick="document.getElementById('zipInput').click()">
+      <input type="file" id="zipInput" class="file-input" accept=".zip">
+      <span>📂</span><span>ZIP 드래그 / 클릭</span>
+    </div>
+    <span class="kit-tag" id="tagMp3">🎙️ MP3 대기</span>
+    <span class="kit-tag" id="tagSrt">📜 SRT 대기</span>
+    <span class="kit-tag sd">🤖 Wan2GP 무료</span>
+  </div>
+</div>
+<div class="main-grid">
+<div class="workspace">
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-title"><span>01</span> Wan2GP Text to Image 설정</div>
+  <div class="sd-section">
+    <div class="sd-header">
+      <div style="font-size:20px;">🎨</div>
+      <div><div class="sd-title">Wan2GP 로컬 AI 이미지 생성 — 완전 무료 무제한</div><div class="sd-sub">로컬 실행 · RTX 3060 최적화 · 텍스트 기반 생성</div></div>
+      <span class="sd-status" id="sdStatus" style="background:rgba(16,185,129,0.15);color:var(--success);">● 준비 완료</span>
+    </div>
+    <div class="sd-row">
+      <label>Wan2GP 주소</label>
+      <input type="text" class="styled-input" id="sdUrl" value="http://127.0.0.1:7860" style="font-family:'JetBrains Mono',monospace;font-size:12px;">
+      <button onclick="openWan2GP()" style="padding:10px 16px;background:var(--accent2);border:none;border-radius:10px;color:white;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">웹 열기</button>
+    </div>
+    <div class="sd-row">
+      <label>모델</label>
+      <select class="styled-input" id="sdModel" style="font-family:inherit;font-size:12px;"><option value="text2image">Text to Image (권장)</option><option value="image2image">Image to Image</option></select>
+    </div>
+  </div>
+  <button class="gen-all-btn" id="genAllBtn" onclick="autoGenerateWan2GP()">🤖 Wan2GP 자동 생성 시작</button>
+  <div class="gen-progress" id="genProgress"></div>
+  <canvas id="viz" style="display:none;"></canvas>
+  <div id="sceneImgGrid" class="scene-img-grid"></div>
+</div>
+<div class="card">
+  <div class="card-title"><span>02</span> 씬 편집 & 이미지</div>
+  <div id="sceneEditor"></div>
+  <button onclick="addScene()" style="margin-top:12px;width:100%;padding:10px;background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.4);border-radius:8px;color:#a78bfa;font-weight:700;cursor:pointer;">+ 씬 추가</button>
+  <div id="imgPreview" class="image-preview-flex"></div>
+</div>
+<div class="card">
+  <div class="card-title"><span>03</span> 자막 설정</div>
+  <div class="settings-grid">
+    <div class="setting-vbox">
+      <label>위치</label>
+      <select class="styled-select" id="subPos"><option value="top">위</option><option value="middle" selected>중앙</option><option value="bottom">아래</option></select>
+    </div>
+    <div class="setting-vbox">
+      <label>크기</label>
+      <input type="range" min="0.02" max="0.07" step="0.005" value="0.042" style="width:100%;" id="subSize"><span id="subSizeVal">표준</span>
+    </div>
+    <div class="setting-vbox">
+      <label>배경 투명도</label>
+      <input type="range" min="0" max="1" step="0.1" value="0.6" style="width:100%;" id="subBg">
+    </div>
+    <div class="setting-vbox">
+      <label>굵기</label>
+      <select class="styled-select" id="subWeight"><option value="normal">보통</option><option value="bold" selected>진하게</option></select>
+    </div>
+  </div>
+  <div style="margin-top:16px;">
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:8px;">자막 색상</label>
+    <div class="color-row">
+      <button class="color-btn active" data-color="#ffffff" onclick="setSubColor(this)" title="흰색" style="background:#ffffff;"></button>
+      <button class="color-btn" data-color="#ffff00" onclick="setSubColor(this)" title="노랑" style="background:#ffff00;"></button>
+      <button class="color-btn" data-color="#00ff00" onclick="setSubColor(this)" title="초록" style="background:#00ff00;"></button>
+      <button class="color-btn" data-color="#00ffff" onclick="setSubColor(this)" title="하늘" style="background:#00ffff;"></button>
+      <button class="color-btn" data-color="#ff6b35" onclick="setSubColor(this)" title="주황" style="background:#ff6b35;"></button>
+    </div>
+  </div>
+  <div style="margin-top:16px;">
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:8px;">배경음악</label>
+    <div class="drop-zone" id="bgmZone" style="min-height:60px;">
+      <input type="file" id="bgmInput" class="file-input" accept="audio/*">
+      <span style="font-size:16px;">🎵</span>
+      <span style="font-size:12px;">BGM 선택 (선택사항)</span>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:10px;align-items:center;">
+      <label style="font-size:11px;color:var(--muted);white-space:nowrap;">BGM 볼륨:</label>
+      <input type="range" id="bgmVol" min="0" max="1" step="0.05" value="0.3" style="flex:1;">
+      <span id="bgmVolVal" style="font-size:11px;color:var(--muted);min-width:35px;">30%</span>
+    </div>
+  </div>
+  <div style="margin-top:16px;">
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:8px;">재생 속도</label>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="range" id="playbackRate" min="0.5" max="2" step="0.1" value="1" style="flex:1;">
+      <span id="rateVal" style="font-size:11px;color:var(--muted);min-width:35px;">1.00x</span>
+    </div>
+  </div>
+</div>
+</div>
+<div class="preview-wrapper">
+  <div style="width:100%;">
+    <div class="card-title" style="padding:0 24px;margin-bottom:12px;"><span>미리보기</span></div>
+    <div class="video-preview-box">
+      <div id="previewPlaceholder" style="text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">🎬</div>
+        <div style="font-size:13px;color:var(--muted);">렌더링하면 미리보기가 표시됩니다</div>
+      </div>
+      <video id="resultVideo" style="display:none;"></video>
+    </div>
+  </div>
+  <button class="render-btn" id="renderBtn" disabled>
+    <span>▶️</span><span>9:16 · 16:9 렌더링</span>
+  </button>
+  <div class="progress-section" id="progressSec">
+    <div class="progress-track">
+      <div class="progress-thumb" id="progressThumb"></div>
+    </div>
+    <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--muted);">
+      <span id="progPct">0%</span>
+    </div>
+  </div>
+  <div id="downloadSection" style="display:none;width:100%;gap:12px;display:flex;flex-direction:column;">
+    <button onclick="downloadVideo('916')" style="width:100%;padding:12px;background:var(--accent);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;">📥 9:16 다운로드</button>
+    <button onclick="downloadVideo('169')" style="width:100%;padding:12px;background:var(--accent2);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;">📥 16:9 다운로드</button>
+  </div>
+  <div id="logPanel" class="log-panel"></div>
+</div>
+</div>
+</div>
+<script>
+var KIT_AUDIO_B64='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA//NMRAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAAHiAAkJCQkJCQkJCQkJCQkJCR5eXl5eXl5eXl5eXl5eXmRkZGRkZGRkZGRkZGRkZGZmZmZmZmZmZmZmZmZmZmZmZn//////////wAAAP/7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+f/7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+//kY';
+var KIT_SCENES=[
+  {text:"여러분, 지금 대한민국 법조계가 발칵 뒤집혔습니다! 형사소송법 개정안이 국회를 통과하자마자, 구자현 검찰총장 권한대행이 전격적으로 사직서를 던졌거든요.",start:0,end:12.914},
+  {text:"구 대행은 책임을 통감한다면서도 뼈아픈 일침을 날렸습니다. 제도가 바뀌더라도 피해자를 보호하는 검찰 본연의 가치가 훼손돼선 안 된다고 말이죠.",start:12.914,end:25.180},
+  {text:"특히 이번 개정안이 검사를 수사 기록에만 매달리게 만드는, 아주 비효율적인 구조라며 비판했습니다. 결국 진실을 밝히기 더 힘들어질 거란 우려입니다.",start:25.180,end:36.609},
+  {text:"문제는 지금 지휘부가 텅 비었다는 거예요. 법무부 장관에 이어 검찰 수장까지 그만두면서, 10월 공소청 출범을 앞두고 사상 초유의 공백 상태가 됐습니다.",start:36.609,end:48.723},
+  {text:"범죄 피해자들도 폭발했습니다. 가해자만 행복한 나라가 됐다며 절규하는 목소리가 전국적으로 확산되고 있어 사태는 더 심각해질 전망입니다.",start:48.723,end:59.771},
+  {text:"국가의 존재 이유인 피해자 구제가 흔들리고 있는 지금, 여러분은 이 사태를 어떻게 생각하시나요? 지금 바로 댓글로 여러분의 의견을 들려주세요!",start:59.771,end:70.171}
+];
+var KIT_PROMPTS=[
+  {scene:"씬1",prompt:"A serious Korean male official in dark suit at press conference podium, multiple microphones, camera flashes, cinematic news, photorealistic, 9:16 vertical."},
+  {scene:"씬2",prompt:"Bronze scale of justice leaning to one side on dark wooden desk, Korean courtroom blurred background, dramatic lighting, cinematic, 9:16 vertical."},
+  {scene:"씬3",prompt:"Desk piled with legal documents in Korean office, hand holding fountain pen, stressed atmosphere, realistic, 9:16 vertical."},
+  {scene:"씬4",prompt:"Empty leather executive chair in grand office overlooking Seoul at sunset, lonely atmosphere, cinematic, 9:16 vertical."},
+  {scene:"씬5",prompt:"Distressed Korean woman tearful on busy Seoul street at dusk, blurred city lights, emotional dramatic, 9:16 vertical."},
+  {scene:"씬6",prompt:"Low angle Korean government building at night, brightly lit, cinematic blue hour, symbol of authority, 9:16 vertical."}
+];
+var state={images:[],audio:null,bgm:null,thumbnail:null,isRendering:false,blob916:null,blob169:null,scenes:KIT_SCENES.map(function(s){return{text:s.text,start:s.start,end:s.end};}),genImgBlobs:[null,null,null,null,null,null],refB64:null,refMime:null,subColor:'#ffffff'};
+function b64toBlob(b64,mime){var bin=atob(b64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
+function parseSrtTime(t){var a=t.split(':'),b=a[2].split(',');return parseInt(a[0])*3600+parseInt(a[1])*60+parseInt(b[0])+parseInt(b[1])/1000;}
+function fmtTime(s){var m=Math.floor(s/60),sc=Math.floor(s%60);return String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');}
+function setSubColor(btn){document.querySelectorAll('.color-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');state.subColor=btn.dataset.color;}
+var logPanel=document.getElementById('logPanel');
+function addLog(msg,level){level=level||'info';logPanel.classList.add('visible');var d=document.createElement('div');d.className='log-entry '+level;d.textContent='['+new Date().toLocaleTimeString()+'] '+msg;logPanel.appendChild(d);logPanel.scrollTop=logPanel.scrollHeight;}
+async function loadKitZip(file){
+  if(!file||!file.name.endsWith('.zip')){addLog('ZIP 파일만 지원','err');return;}
+  addLog('ZIP: '+file.name,'info');
+  try{
+    if(typeof JSZip==='undefined'){await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    var zip=await JSZip.loadAsync(file),loaded=[];
+    var mp3f=null;zip.forEach(function(p,f){if(p.endsWith('.mp3'))mp3f=f;});
+    if(mp3f){var blob=await mp3f.async('blob');state.audio=new File([blob],'narration.mp3',{type:'audio/mpeg'});document.getElementById('audioStatus').textContent='ZIP MP3';document.getElementById('audioZone').classList.add('loaded');document.getElementById('tagMp3').textContent='MP3 OK';loaded.push('MP3');addLog('MP3 로드됨','ok');}
+    var srtf=null;zip.forEach(function(p,f){if(p.endsWith('.srt'))srtf=f;});
+    if(srtf){var txt=await srtf.async('text');var blocks=txt.trim().split(/\r?\n\r?\n/).filter(function(b){return b.trim();});state.scenes=blocks.map(function(b){var lines=b.split(/\r?\n/).filter(function(l){return l.trim();});var start=null,end=null;if(lines[1]&&lines[1].indexOf('-->')>=0){var pts=lines[1].split('-->');start=parseSrtTime(pts[0].trim());end=parseSrtTime(pts[1].trim());}return{text:lines.slice(2).join(' '),start:start,end:end};});renderSceneEditor();document.getElementById('srtStatus').textContent='ZIP SRT '+state.scenes.length;document.getElementById('srtZone').classList.add('loaded');document.getElementById('tagSrt').textContent='SRT OK';loaded.push('SRT');addLog('SRT '+state.scenes.length+'씬','ok');}
+    var txts=[];zip.forEach(function(p,f){if(f.name.endsWith('.txt')&&p.indexOf('scene')>=0)txts.push({p:p,f:f});});txts.sort(function(a,b){return a.p.localeCompare(b.p);});
+    if(txts.length>0){var newP=[];for(var i=0;i<txts.length;i++){var t=await txts[i].f.async('text');newP.push({scene:'씬'+(i+1),prompt:t.trim()});}KIT_PROMPTS=newP;renderSceneImgGrid();loaded.push('프롬프트 '+newP.length+'개');addLog('프롬프트 로드됨','ok');}
+    document.getElementById('zipZone').innerHTML='<span>OK</span><span style="font-size:11px;">'+file.name+'</span>';addLog('ZIP완료: '+loaded.join(', '),'ok');checkReady();
+  }catch(e){addLog('ZIP오류: '+e.message,'err');}
+}
+function openWan2GP(){var url=document.getElementById('sdUrl').value.trim();window.open(url,'wan2gp','width=1400,height=900');addLog('Wan2GP 웹 UI 열렸습니다. Text to Image 탭을 선택하세요.','ok');}
+
+async function autoGenerateWan2GP(){if(KIT_PROMPTS.length===0){alert('프롬프트를 먼저 로드해주세요 (ZIP 파일 업로드)');return;}var url=document.getElementById('sdUrl').value.trim().replace(/\/$/,'');var btn=document.getElementById('genAllBtn');btn.disabled=true;btn.textContent='생성 중...';var wanWin=window.open(url,'wan2gp','width=1400,height=900');addLog('Wan2GP 웹 UI 열렸습니다. 생성을 시작합니다.','info');for(var i=0;i<KIT_PROMPTS.length;i++){var pe=document.getElementById('prompt-'+i);var prompt=pe?pe.value.trim():KIT_PROMPTS[i].prompt;addLog('씬 '+(i+1)+' 생성 중...','info');try{var result=await generateImageWan2GP(url,prompt);if(result&&result.b64){var bin=atob(result.b64),arr=new Uint8Array(bin.length);for(var j=0;j<bin.length;j++)arr[j]=bin.charCodeAt(j);var blob=new Blob([arr],{type:'image/png'});var file=new File([blob],'scene_'+(i+1)+'.png',{type:'image/png'});state.genImgBlobs[i]=file;var objUrl=URL.createObjectURL(blob);var thumb=document.getElementById('sthumb-'+i);thumb.innerHTML='<img src="'+objUrl+'" alt="씬'+(i+1)+'">';var sbtn=document.getElementById('sbtn-'+i);sbtn.className='sbtn done';sbtn.textContent='완료';addLog('씬 '+(i+1)+' 완료','ok');}else{addLog('씬 '+(i+1)+' 응답 오류','err');}await new Promise(function(res){setTimeout(res,500);});}catch(e){addLog('씬 '+(i+1)+' 오류: '+e.message,'err');}}addLog('모든 씬 생성 완료!','ok');btn.disabled=false;btn.textContent='생성 완료 ✓';checkReady();setTimeout(function(){btn.textContent='🤖 Wan2GP 자동 생성 시작';},3000);}
+
+async function generateImageWan2GP(url,prompt){try{var res=await fetch(url+'/api/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:[prompt,'1.3B','Default',256,256]})});if(!res.ok)throw new Error('HTTP '+res.status);var data=await res.json();if(data.data&&data.data[0]){var img=data.data[0];if(typeof img==='string'){if(img.startsWith('data:'))img=img.split(',')[1];}return{b64:img};}throw new Error('No image in response');}catch(e){addLog('API 호출 실패: '+e.message,'err');return null;}}
+async function generateImage(prompt){var url=document.getElementById('sdUrl').value.trim().replace(/\/$/,'');var steps=parseInt(document.getElementById('sdSteps').value);var cfg=parseFloat(document.getElementById('sdCfg').value);var sampler=document.getElementById('sdSampler').value;var denoise=parseFloat(document.getElementById('sdDenoise').value);var model=document.getElementById('sdModel').value;var base={steps:steps,cfg_scale:cfg,width:576,height:1024,sampler_name:sampler,restore_faces:false};if(model)base.override_settings={sd_model_checkpoint:model};if(state.refB64&&state.refMime){var body=Object.assign({},base,{init_images:['data:'+state.refMime+';base64,'+state.refB64],denoising_strength:denoise,prompt:prompt,negative_prompt:'text,watermark,blurry,low quality,nsfw,logo'});var r=await fetch(url+'/sdapi/v1/img2img',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){var e=await r.json().catch(function(){return{};});throw new Error(e.detail||'img2img오류');}var d=await r.json();if(d.images&&d.images[0])return{b64:d.images[0],mime:'image/png'};throw new Error('img2img이미지없음');}var body=Object.assign({},base,{prompt:prompt+', masterpiece, best quality, photorealistic, 8k, cinematic',negative_prompt:'text,watermark,blurry,low quality,nsfw,logo,ugly,deformed'});var r=await fetch(url+'/sdapi/v1/txt2img',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){var err=await r.json().catch(function(){return{};});throw new Error(err.detail||'HTTP '+r.status);}var data=await r.json();if(data.images&&data.images[0])return{b64:data.images[0],mime:'image/png'};throw new Error('SD이미지없음');}
+function renderSceneImgGrid(){var grid=document.getElementById('sceneImgGrid');grid.innerHTML='';KIT_PROMPTS.forEach(function(item,i){var c=document.createElement('div');c.className='scard';var blob=state.genImgBlobs[i];var imgH=blob?'<img src="'+URL.createObjectURL(blob)+'" alt="씬'+(i+1)+'">':'<div class="sph">🎬</div>';var bc=blob?'sbtn done':'sbtn',bt=blob?'재생성':'생성';c.innerHTML='<div class="sthumb" id="sthumb-'+i+'">'+imgH+'</div><div class="sinfo"><div class="slabel">'+item.scene+'</div><div style="font-size:9px;color:#a78bfa;font-weight:700;margin-bottom:3px;letter-spacing:0.5px;">✏️ 프롬프트 편집</div><textarea id="prompt-'+i+'" style="width:100%;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.5);border-radius:8px;color:#e2e8f0;font-size:10px;line-height:1.5;padding:7px;resize:vertical;min-height:72px;font-family:inherit;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='rgba(124,58,237,0.5)'">'+item.prompt+'</textarea><button class="'+bc+'" id="sbtn-'+i+'" onclick="genSingle('+i+')">'+bt+'</button><div class="sprog"><div class="sprogspn" id="spn-'+i+'"></div><span id="sprog-'+i+'"></span></div></div>';grid.appendChild(c);});}
+async function genSingle(idx){var btn=document.getElementById('sbtn-'+idx);var thumb=document.getElementById('sthumb-'+idx);var prog=document.getElementById('sprog-'+idx);var spn=document.getElementById('spn-'+idx);btn.disabled=true;btn.className='sbtn loading';btn.textContent='생성중...';thumb.innerHTML='<div class="sph" style="animation:pulse 1s infinite">✨</div>';if(spn)spn.classList.add('on');if(prog)prog.textContent='0%';var pollStop=false;(async function(){var sdUrl=document.getElementById('sdUrl').value.trim().replace(/\/$/,'');while(!pollStop){await new Promise(function(r){setTimeout(r,600);});try{var r=await fetch(sdUrl+'/sdapi/v1/progress');var d=await r.json();if(prog)prog.textContent=Math.floor((d.progress||0)*100)+'%';}catch(e){}}})();addLog('씬'+(idx+1)+' 생성...','info');try{var promptEl=document.getElementById('prompt-'+idx);var usedPrompt=promptEl?promptEl.value.trim():KIT_PROMPTS[idx].prompt;if(promptEl)KIT_PROMPTS[idx].prompt=usedPrompt;var result=await generateImage(usedPrompt);pollStop=true;var bin=atob(result.b64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);var blob=new Blob([arr],{type:result.mime});var file=new File([blob],'scene_'+(idx+1)+'.png',{type:result.mime});state.genImgBlobs[idx]=file;var objUrl=URL.createObjectURL(blob);thumb.innerHTML='<img src="'+objUrl+'" alt="씬'+(idx+1)+'">';btn.className='sbtn done';btn.textContent='완료(재생성)';btn.disabled=false;if(spn)spn.classList.remove('on');if(prog)prog.textContent='완료';var prev=document.getElementById('prev-'+idx);if(prev)prev.remove();var d2=document.createElement('div');d2.id='prev-'+idx;d2.className='preview-item';d2.style.backgroundImage='url('+objUrl+')';document.getElementById('imgPreview').appendChild(d2);addLog('씬'+(idx+1)+' 완료','ok');checkReady();}catch(e){pollStop=true;btn.className='sbtn';btn.textContent='재시도';btn.disabled=false;thumb.innerHTML='<div class="sph" style="color:var(--danger)">⚠️</div>';if(spn)spn.classList.remove('on');addLog('씬'+(idx+1)+' 오류: '+e.message,'err');}}
+async function generateAll(){var btn=document.getElementById('genAllBtn');btn.disabled=true;btn.textContent='생성중...';for(var i=0;i<KIT_PROMPTS.length;i++){document.getElementById('genProgress').textContent='진행: '+(i+1)+'/'+KIT_PROMPTS.length;await genSingle(i);}document.getElementById('genProgress').textContent='완료!';btn.disabled=false;btn.textContent='전체재생성';}
+function initRefZone(){var zone=document.getElementById('refZone'),input=document.getElementById('refInput');input.onchange=function(e){if(e.target.files[0])loadRef(e.target.files[0]);};zone.ondragover=function(e){e.preventDefault();zone.style.borderColor='var(--accent2)';};zone.ondragleave=function(){zone.style.borderColor='';};zone.ondrop=function(e){e.preventDefault();zone.style.borderColor='';if(e.dataTransfer.files[0])loadRef(e.dataTransfer.files[0]);};}
+function loadRef(file){var reader=new FileReader();reader.onload=function(e){state.refB64=e.target.result.split(',')[1];state.refMime=file.type;document.getElementById('refZone').classList.add('has-img');document.getElementById('refPreview').innerHTML='<img src="'+e.target.result+'"><span style="font-size:11px;color:var(--success);">'+file.name+'</span><span style="font-size:10px;color:var(--muted);">img2img모드</span>';document.getElementById('refDeleteBtn').style.display='block';addLog('레퍼런스: '+file.name,'ok');};reader.readAsDataURL(file);}
+function deleteRef(){
+  state.refB64=null;state.refMime=null;
+  document.getElementById('refPreview').innerHTML=
+    '<span style="font-size:24px;">🖼️</span>'+
+    '<span style="font-size:12px;color:var(--muted);">레퍼런스 이미지 클릭/드래그</span>'+
+    '<span style="font-size:11px;color:rgba(255,255,255,0.2);">업로드 시 img2img 모드 자동 전환</span>';
+  document.getElementById('refZone').classList.remove('has-img');
+  document.getElementById('refDeleteBtn').style.display='none';
+  document.getElementById('refInput').value='';
+  addLog('레퍼런스 이미지 삭제됨 — txt2img 모드로 전환','ok');
+}
+function init(){var zones=[{el:'imgZone',tg:'imgInput'},{el:'audioZone',tg:'audioInput'},{el:'srtZone',tg:'srtInput'},{el:'thumbZone',tg:'thumbInput'},{el:'bgmZone',tg:'bgmInput'}];zones.forEach(function(z){var el=document.getElementById(z.el),tg=document.getElementById(z.tg);if(!el||!tg)return;el.onclick=function(){tg.click();};el.ondragover=function(e){e.preventDefault();el.classList.add('active');};el.ondragleave=function(){el.classList.remove('active');};el.ondrop=function(e){e.preventDefault();el.classList.remove('active');handleFiles(e.dataTransfer.files,z.tg);};tg.onchange=function(e){handleFiles(e.target.files,z.tg);};});var kz=document.getElementById('zipZone'),ki=document.getElementById('zipInput');ki.onchange=function(e){if(e.target.files[0])loadKitZip(e.target.files[0]);};kz.ondragover=function(e){e.preventDefault();kz.style.background='rgba(16,185,129,0.3)';};kz.ondragleave=function(){kz.style.background='';};kz.ondrop=function(e){e.preventDefault();kz.style.background='';if(e.dataTransfer.files[0])loadKitZip(e.dataTransfer.files[0]);};document.getElementById('playbackRate').oninput=function(e){document.getElementById('rateVal').textContent=parseFloat(e.target.value).toFixed(2)+'x';};document.getElementById('bgmVol').oninput=function(e){document.getElementById('bgmVolVal').textContent=Math.round(e.target.value*100)+'%';};document.getElementById('subSize').oninput=function(e){var map={0.02:'작게',0.03:'소',0.042:'표준',0.055:'크게',0.07:'최대'};document.getElementById('subSizeVal').textContent=map[parseFloat(e.target.value)]||'';};document.getElementById('renderBtn').onclick=handleRender;autoLoadKit();}
+function handleFiles(files,type){if(type==='imgInput'){var imgs=Array.from(files).filter(function(f){return f.type.startsWith('image/');});imgs.sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});state.images=state.images.concat(imgs);renderImgPreview();addLog('이미지 '+imgs.length+'개','ok');}else if(type==='audioInput'){state.audio=files[0];document.getElementById('audioZone').classList.add('loaded');addLog('오디오: '+files[0].name,'ok');}else if(type==='srtInput'){var r=new FileReader();r.onload=function(e){var blocks=e.target.result.trim().split(/\r?\n\r?\n/).filter(function(b){return b.trim();});state.scenes=blocks.map(function(b){var lines=b.split(/\r?\n/).filter(function(l){return l.trim();});var start=null,end=null;if(lines[1]&&lines[1].indexOf('-->')>=0){var pts=lines[1].split('-->');start=parseSrtTime(pts[0].trim());end=parseSrtTime(pts[1].trim());}return{text:lines.slice(2).join(' '),start:start,end:end};});renderSceneEditor();document.getElementById('srtZone').classList.add('loaded');addLog('SRT '+state.scenes.length+'씬','ok');};r.readAsText(files[0]);}else if(type==='bgmInput'){state.bgm=files[0];document.getElementById('bgmZone').classList.add('loaded');addLog('BGM: '+files[0].name,'ok');}else if(type==='thumbInput'){state.thumbnail=files[0];document.getElementById('thumbZone').classList.add('loaded');addLog('썸네일: '+files[0].name,'ok');}checkReady();}
+function renderImgPreview(){var c=document.getElementById('imgPreview');c.innerHTML='';state.images.forEach(function(f){var d=document.createElement('div');d.className='preview-item';d.style.backgroundImage='url('+URL.createObjectURL(f)+')';c.appendChild(d);});}
+function renderSceneEditor(){var editor=document.getElementById('sceneEditor');editor.innerHTML='';var empty=document.getElementById('sceneEditorEmpty');if(empty)empty.style.display='none';state.scenes.forEach(function(scene,i){var card=document.createElement('div');card.className='scene-card';var timeStr=scene.start!==null?fmtTime(scene.start)+' ~ '+fmtTime(scene.end):'';card.innerHTML='<span class="scene-num">S'+String(i+1).padStart(2,'0')+'</span><input class="scene-input" id="stxt-'+i+'" value="'+scene.text.replace(/"/g,'&quot;')+'"><span class="scene-time">'+timeStr+'</span>';editor.appendChild(card);});}
+function addScene(){state.scenes.push({text:'새 씬 텍스트',start:null,end:null});renderSceneEditor();}
+function checkReady(){var hasImgs=state.genImgBlobs.some(function(b){return b;})||state.images.length>0;document.getElementById('renderBtn').disabled=!(hasImgs&&state.audio);}
+async function handleRender(){if(state.isRendering||!state.audio)return;state.isRendering=true;document.getElementById('renderBtn').disabled=true;document.getElementById('progressSec').classList.add('visible');try{state.scenes.forEach(function(s,i){var el=document.getElementById('stxt-'+i);if(el)s.text=el.value;});var imgFiles=state.genImgBlobs.some(function(b){return b;})?state.genImgBlobs.filter(function(b){return b;}):state.images;addLog('오디오디코딩...','info');var audioCtx=new(window.AudioContext||window.webkitAudioContext)();var ab=await state.audio.arrayBuffer();var audioBuffer=await audioCtx.decodeAudioData(ab);addLog('오디오: '+audioBuffer.duration.toFixed(2)+'초','info');var images=await Promise.all(imgFiles.map(function(f){return new Promise(function(res){var img=new Image();img.onload=function(){res(img);};img.src=URL.createObjectURL(f);});}));
+    var thumbImg=null;
+    if(state.thumbnail){
+      thumbImg=await new Promise(function(res){var img=new Image();img.onload=function(){res(img);};img.src=URL.createObjectURL(state.thumbnail);});
+      addLog('썸네일 로드됨','ok');
+    }
+    var bgmBuffer=null;if(state.bgm){var bgmAb=await state.bgm.arrayBuffer();bgmBuffer=await audioCtx.decodeAudioData(bgmAb);addLog('BGM로드됨','ok');}addLog('9:16 렌더링...','info');await startProduction(images,thumbImg,audioBuffer,bgmBuffer,audioCtx,1080,1920,'916');addLog('16:9 렌더링...','info');await startProduction(images,thumbImg,audioBuffer,bgmBuffer,audioCtx,1920,1080,'169');var rv=document.getElementById('resultVideo');rv.src=URL.createObjectURL(state.blob916||state.blob169);rv.style.display='block';document.getElementById('previewPlaceholder').style.display='none';document.getElementById('downloadSection').style.display='flex';addLog('영상완료!','ok');}catch(e){addLog('오류: '+e.message,'err');}finally{state.isRendering=false;document.getElementById('renderBtn').disabled=false;}}
+function startProduction(images,thumbImg,audioBuffer,bgmBuffer,audioCtx,W,H,label){return new Promise(function(resolve){var viz=document.getElementById('viz');viz.width=W;viz.height=H;viz.style.display='block';var ctx=viz.getContext('2d');var fps=30,totalDuration=audioBuffer.duration,totalFrames=Math.ceil(totalDuration*fps);addLog(label+': '+totalFrames+'f','info');var chunks=[],stream=viz.captureStream(fps);var dest=audioCtx.createMediaStreamDestination();var narSrc=audioCtx.createBufferSource();narSrc.buffer=audioBuffer;narSrc.connect(dest);if(bgmBuffer){var bgmGain=audioCtx.createGain();bgmGain.gain.value=parseFloat(document.getElementById('bgmVol').value)||0.3;var bgmSrc=audioCtx.createBufferSource();bgmSrc.buffer=bgmBuffer;bgmSrc.loop=true;bgmSrc.connect(bgmGain);bgmGain.connect(dest);bgmSrc.start();}var combined=new MediaStream(stream.getVideoTracks().concat(dest.stream.getAudioTracks()));var recorder=new MediaRecorder(combined,{mimeType:'video/webm'});recorder.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data);};recorder.onstop=function(){var blob=new Blob(chunks,{type:'video/webm'});if(label==='916')state.blob916=blob;else state.blob169=blob;resolve();};recorder.start(100);narSrc.start();var subColor=state.subColor||'#ffffff';var subSize=parseFloat(document.getElementById('subSize').value)||0.042;var subBgAlpha=parseFloat(document.getElementById('subBg').value)||0.6;var subWeight=document.getElementById('subWeight').value||'bold';var frame=0;function render(){if(frame>=totalFrames){
+        document.getElementById('progressThumb').style.width='100%';
+        document.getElementById('progPct').textContent='100%';
+        setTimeout(function(){recorder.stop();try{narSrc.stop();}catch(e){}},500);
+        return;
+      }var prog=frame/totalFrames;document.getElementById('progressThumb').style.width=(prog*100)+'%';document.getElementById('progPct').textContent=Math.floor(prog*100)+'%';ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);var t=frame/fps,imgIdx=0;for(var si=0;si<state.scenes.length;si++){if(state.scenes[si].start!==null&&t>=state.scenes[si].start)imgIdx=si;}imgIdx=Math.min(imgIdx,images.length-1);var drawImg = images[imgIdx] || null;
+      if(frame===0 && thumbImg) drawImg = thumbImg;
+      if(drawImg) ctx.drawImage(drawImg,0,0,W,H);var scene=null;for(var sj=0;sj<state.scenes.length;sj++){var s=state.scenes[sj];if(s.start!==null&&t>=s.start&&t<s.end){scene=s;break;}}if(!scene&&state.scenes.length>0){var seg=Math.floor(t/(totalDuration/state.scenes.length));scene=state.scenes[Math.min(seg,state.scenes.length-1)];}if(scene&&scene.text){
+        var pos=document.getElementById('subPos').value;
+        var fs=Math.floor(W*subSize);
+        ctx.font=subWeight+' '+fs+'px Noto Sans KR, sans-serif';
+        ctx.textAlign='center';
+        var yPos=pos==='top'?H*0.15:pos==='middle'?H*0.5:H*0.85;
+        var maxW=W*0.85;
+        var words=scene.text.split(' ');
+        var lines=[],line='';
+        words.forEach(function(word){
+          var test=line?(line+' '+word):word;
+          if(ctx.measureText(test).width>maxW&&line){
+            lines.push(line);line=word;
+          }else{line=test;}
+        });
+        if(line)lines.push(line);
+        if(lines.length>3)lines=lines.slice(0,3);
+        var lh=fs*1.6;
+        var totalH=lines.length*lh;
+        var startY=yPos-totalH/2+fs*0.8;
+        lines.forEach(function(l,li){
+          var y=startY+li*lh;
+          var tw=ctx.measureText(l).width;
+          if(subBgAlpha>0){
+            ctx.fillStyle='rgba(0,0,0,'+subBgAlpha+')';
+            var pad=fs*0.4;
+            ctx.beginPath();
+            ctx.roundRect(W/2-tw/2-pad,y-fs,tw+pad*2,fs*1.4,8);
+            ctx.fill();
+          }
+          ctx.strokeStyle='rgba(0,0,0,0.8)';
+          ctx.lineWidth=fs*0.08;
+          ctx.strokeText(l,W/2,y);
+          ctx.fillStyle=subColor;
+          ctx.fillText(l,W/2,y);
+        });
+      }frame++;requestAnimationFrame(render);}render();});}
+function downloadVideo(ratio){var blob=ratio==='916'?state.blob916:state.blob169;if(!blob)return;var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ShortsForge_'+ratio+'_'+Date.now()+'.webm';a.click();}
+function checkWan2GP(){var url=document.getElementById('sdUrl').value.trim().replace(/\/$/,'');fetch(url+'/api/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:['test','1.3B','Default',256,256]})}).then(function(r){if(r.ok)addLog('Wan2GP 연결 확인됨','ok');else addLog('Wan2GP 응답 오류','err');}).catch(function(e){addLog('Wan2GP 연결 실패: '+e.message,'err');});}
+function autoLoadKit(){try{var blob=b64toBlob(KIT_AUDIO_B64,'audio/mpeg');state.audio=new File([blob],'narration.mp3',{type:'audio/mpeg'});document.getElementById('audioZone').classList.add('loaded');addLog('나레이션 자동로드됨','ok');}catch(e){addLog('오디오로드실패: '+e.message,'err');}renderSceneEditor();document.getElementById('srtZone').classList.add('loaded');addLog('SRT '+state.scenes.length+'씬 로드됨','ok');renderSceneImgGrid();setTimeout(checkWan2GP,800);}
+init();
+</script>
+</body>
+</html>
