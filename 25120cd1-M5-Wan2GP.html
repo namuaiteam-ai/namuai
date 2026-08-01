@@ -702,7 +702,7 @@ function checkReady() {
 // 곧 "세션 등록"이기도 해서, 이게 없으면 다른 방식(/call, /api)은 전부 거부당했습니다.
 // fn_index/파라미터 순서는 하드코딩하지 않고, 매 호출마다 /config 에서 실제 구성을 읽어와
 // 해당 함수의 입력 컴포넌트 기본값 위로 우리가 원하는 값(prompt/resolution/seed)만 덮어씁니다.
-const WAN = { configCache: null, sessionHash: null, prefix: null, queueStream: null, queueWaiters: [] };
+const WAN = { configCache: null, sessionHash: null, prefix: null, queueStream: null, queueWaiters: [], componentValues: {} };
 
 function wanSessionHash() {
   if (!WAN.sessionHash) WAN.sessionHash = 'nf' + Math.random().toString(36).slice(2, 12);
@@ -731,10 +731,15 @@ function wanComponentById(config, id) {
   return (config.components || []).find(c => c.id === id);
 }
 
-// dep의 입력 컴포넌트 기본값으로 데이터 배열을 만들고, 라벨에 overrides 키가 포함되면 그 값으로 교체
+// dep의 입력 컴포넌트 값으로 데이터 배열을 만듦. gr.State처럼 이전 호출의 출력으로 갱신된 값이
+// WAN.componentValues에 있으면 그걸 우선 쓰고(실제 브라우저가 상태를 이어주는 것과 동일하게),
+// 없으면 /config의 기본값을 씀. 그 위에 라벨이 overrides 키를 포함하면 그 값으로 교체.
 function wanBuildData(config, dep, overrides) {
   const inputs = dep.inputs || [];
   const data = inputs.map(id => {
+    if (Object.prototype.hasOwnProperty.call(WAN.componentValues, id)) {
+      return WAN.componentValues[id];
+    }
     const comp = wanComponentById(config, id);
     const v = comp && comp.props ? comp.props.value : null;
     return v === undefined ? null : v;
@@ -760,6 +765,24 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
+// dep의 outputs(컴포넌트 id 목록)와 실제 반환값을 짝지어 WAN.componentValues에 저장.
+// 다음 호출에서 같은 컴포넌트(특히 gr.State)를 입력으로 쓸 때 최신 값을 이어받기 위함.
+function wanRecordOutputs(dep, output) {
+  const outputs = dep.outputs || [];
+  if (!Array.isArray(output)) return;
+  outputs.forEach((id, i) => {
+    if (i < output.length) WAN.componentValues[id] = output[i];
+  });
+}
+
+// data 구성 + 호출 + 출력값 기록을 한번에 수행
+async function wanCallDep(url, config, dep, index, sessionHash, overrides) {
+  const data = wanBuildData(config, dep, overrides || {});
+  const output = await wanCall(url, index, data, sessionHash);
+  wanRecordOutputs(dep, output);
+  return output;
+}
+
 // 페이지가 브라우저에서 열릴 때 자동 실행되는 load 이벤트(들)를 찾음.
 // WanGP는 여기서 서버 인스턴스 식별값 등을 세션 상태에 심어두는 것으로 보이며,
 // 이게 없으면 "App has been restarted since the form was displayed" 에러가 남.
@@ -781,9 +804,8 @@ async function wanTriggerLoadEvents(url, config, sessionHash) {
   WAN.loadTriggered = true;
   const loads = wanFindLoadDependencies(config);
   for (const l of loads) {
-    const data = wanBuildData(config, l.dep, {});
     try {
-      await wanCall(url, l.index, data, sessionHash);
+      await wanCallDep(url, config, l.dep, l.index, sessionHash, {});
     } catch(e) {
       addLog(`초기화(load) 이벤트 호출 실패, 계속 진행: ${e.message}`, 'info');
     }
@@ -990,29 +1012,25 @@ async function generateSceneImage(idx) {
     const sessionHash = wanSessionHash();
     await wanTriggerLoadEvents(url, config, sessionHash);
 
-    // 1) 프롬프트/해상도/시드를 Wan2GP 상태에 저장
+    // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
     const save = wanFindDependency(config, 'save_inputs');
-    const saveData = wanBuildData(config, save.dep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
-    await wanCall(url, save.index, saveData, sessionHash);
+    await wanCallDep(url, config, save.dep, save.index, sessionHash, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
 
-    // 2) 생성 작업 큐에 등록
+    // 2) 생성 작업 큐에 등록 (1번에서 갱신된 state를 그대로 이어받음)
     const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
-    const addData = wanBuildData(config, add.dep, {});
-    await wanCall(url, add.index, addData, sessionHash);
+    await wanCallDep(url, config, add.dep, add.index, sessionHash, {});
 
     // 3) 생성 파이프라인 실행 (존재하는 단계만, 버전별로 일부 없을 수 있음)
     for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
       if ((config.dependencies || []).some(d => d.api_name === step)) {
         const s = wanFindDependency(config, step);
-        const data = wanBuildData(config, s.dep, {});
-        await wanCall(url, s.index, data, sessionHash);
+        await wanCallDep(url, config, s.dep, s.index, sessionHash, {});
       }
     }
 
     // 4) 결과 갤러리 확정 및 조회
     const fin = wanFindDependency(config, 'finalize_generation');
-    const finData = wanBuildData(config, fin.dep, {});
-    const output = await wanCall(url, fin.index, finData, sessionHash);
+    const output = await wanCallDep(url, config, fin.dep, fin.index, sessionHash, {});
 
     const imgInfo = wanExtractImage(output);
     if (!imgInfo) throw new Error("생성 결과에서 이미지를 찾지 못했습니다");
