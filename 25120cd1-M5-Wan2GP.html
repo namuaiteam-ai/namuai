@@ -237,6 +237,10 @@
             </select>
           </div>
           <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">모델(직접)</span>
+            <input type="text" class="sd-input" id="sd-model-custom" placeholder="예: Chroma 1 HD 8.9B (입력하면 위 드롭다운 대신 이 값을 사용)">
+          </div>
+          <div class="sd-row">
             <span style="font-size:12px; color:var(--muted); width: 70px;">해상도</span>
             <select class="sd-input" id="sd-resolution" style="cursor:pointer;">
               <option value="832x624">832x624 (4:3)</option>
@@ -851,6 +855,27 @@ function wanSeedModelType(config, desiredModel) {
   if (WAN.modelChoiceCompId) WAN.componentValues[WAN.modelChoiceCompId] = desiredModel;
 }
 
+// wgp.py 체인: model_choice.select(change_model_choice_target) -> .then(goto_model_type_fn) ->
+// .then(change_model_from_target(state, model_choice_target)) -> change_model(state, model_type).
+// 이 중간 "target" 표현을 거치지 않고, change_model_from_target에 원하는 모델명을 직접 넣어
+// 한 번에 적용을 시도. api_name이 없으면 조용히 건너뛰고 클라이언트 쪽 상태 패치로 대체.
+async function wanApplyModelViaTarget(url, config, sessionHash, desiredModel) {
+  if (!(config.dependencies || []).some(d => d.api_name === 'change_model_from_target')) {
+    addLog(`change_model_from_target API 없음 - 클라이언트 측 상태 패치만 사용`, 'info');
+    return false;
+  }
+  const found = wanFindDependency(config, 'change_model_from_target');
+  const stateVal = WAN.componentValues[WAN.stateCompId];
+  try {
+    const out = await wanCall(url, found.index, [stateVal, desiredModel], sessionHash);
+    addLog(`change_model_from_target 완료: ${JSON.stringify(out).slice(0, 150)}`, 'info');
+    return true;
+  } catch(e) {
+    addLog(`change_model_from_target 호출 실패, 클라이언트 측 상태 패치로 대체: ${e.message}`, 'info');
+    return false;
+  }
+}
+
 // 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
 function wanQueueDispatch(msg) {
   if (msg.msg === 'process_completed') {
@@ -1116,7 +1141,8 @@ async function generateSceneImage(idx) {
   let basePrompt = state.imagePrompts && state.imagePrompts[idx] ? state.imagePrompts[idx] : state.scenes[idx].text;
   const prompt = basePrompt + ", masterpiece, best quality, highly detailed, realistic photo, cinematic, no text, no watermark";
   const resolution = document.getElementById('sd-resolution').value;
-  const modelChoice = document.getElementById('sd-model').value;
+  const modelCustom = document.getElementById('sd-model-custom').value.trim();
+  const modelChoice = modelCustom || document.getElementById('sd-model').value;
   if (!modelChoice) { alert("모델을 선택해주세요! (연결 확인을 먼저 눌러야 목록이 채워집니다)"); return; }
 
   addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution})`, 'info');
@@ -1130,6 +1156,7 @@ async function generateSceneImage(idx) {
     // await wanTriggerLoadEvents(url, config, sessionHash);
     if (!WAN.stateCompId) wanPopulateModelDropdown(config); // 혹시 연결 확인을 안 거쳤으면 여기서 채움
     wanSeedModelType(config, modelChoice);
+    await wanApplyModelViaTarget(url, config, sessionHash, modelChoice);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
     // wgp.py의 save_inputs(target, ...) 첫 인자 target이 "state"가 아니면(기본값은 아마 "settings",
