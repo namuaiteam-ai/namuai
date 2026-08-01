@@ -878,6 +878,35 @@ async function wanApplyModelViaTarget(url, config, sessionHash, desiredModel) {
   }
 }
 
+// refresh_model_dropdowns(state)가 [model_family, model_base_type_choice, model_choice,
+// refresh_form_trigger]를 돌려주는데, 우리가 패치한 state.model_type을 반영해서 model_choice의
+// choices가 실제로 갱신되는지 확인. 갱신된 choices에 원하는 모델이 있으면 그걸로 model_choice를 덮어씀.
+async function wanTryRefreshModelDropdowns(url, config, sessionHash, desiredModel) {
+  if (!(config.dependencies || []).some(d => d.api_name === 'refresh_model_dropdowns')) {
+    addLog(`refresh_model_dropdowns API 없음`, 'info');
+    return;
+  }
+  const found = wanFindDependency(config, 'refresh_model_dropdowns');
+  const stateVal = WAN.componentValues[WAN.stateCompId];
+  try {
+    const out = await wanCall(url, found.index, [stateVal], sessionHash);
+    addLog(`refresh_model_dropdowns 완료: ${JSON.stringify(out).slice(0, 500)}`, 'info');
+    // outputs: [model_family, model_base_type_choice, model_choice, refresh_form_trigger]
+    const modelChoiceUpdate = out && out[2];
+    const newChoices = modelChoiceUpdate && modelChoiceUpdate.choices;
+    if (Array.isArray(newChoices)) {
+      const values = newChoices.map(c => Array.isArray(c) ? c[1] : c);
+      addLog(`refresh 후 model_choice 선택지: ${JSON.stringify(values)}`, 'info');
+      if (values.includes(desiredModel) && WAN.modelChoiceCompId) {
+        WAN.componentValues[WAN.modelChoiceCompId] = desiredModel;
+        addLog(`${desiredModel}이 새 선택지에 포함됨 - 적용함`, 'ok');
+      }
+    }
+  } catch(e) {
+    addLog(`refresh_model_dropdowns 실패: ${e.message}`, 'info');
+  }
+}
+
 // 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
 function wanQueueDispatch(msg) {
   if (msg.msg === 'process_completed') {
@@ -1151,6 +1180,7 @@ async function generateSceneImage(idx) {
     if (!WAN.stateCompId) wanPopulateModelDropdown(config); // 혹시 연결 확인을 안 거쳤으면 여기서 채움
     wanSeedModelType(config, modelChoice);
     await wanApplyModelViaTarget(url, config, sessionHash, modelChoice);
+    await wanTryRefreshModelDropdowns(url, config, sessionHash, modelChoice);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
     // wgp.py의 save_inputs(target, ...) 첫 인자 target이 "state"가 아니면(기본값은 아마 "settings",
