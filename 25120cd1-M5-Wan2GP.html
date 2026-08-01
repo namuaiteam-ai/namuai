@@ -233,11 +233,11 @@
           <div class="sd-row">
             <span style="font-size:12px; color:var(--muted); width: 70px;">해상도</span>
             <select class="sd-input" id="sd-resolution" style="cursor:pointer;">
-              <option value="832x624">832x624 (가로)</option>
-              <option value="624x832">624x832 (세로)</option>
-              <option value="720x720">720x720 (정방형)</option>
-              <option value="832x480">832x480 (와이드)</option>
-              <option value="480x832">480x832 (숏폼 세로)</option>
+              <option value="832x624 (4:3)">832x624 (4:3)</option>
+              <option value="624x832 (3:4)">624x832 (3:4)</option>
+              <option value="720x720 (1:1)">720x720 (1:1)</option>
+              <option value="832x480 (16:9)" selected>832x480 (16:9)</option>
+              <option value="480x832 (9:16)">480x832 (9:16) — 숏폼 세로</option>
             </select>
           </div>
           <div style="font-size:10px; color:var(--muted); line-height:1.5;">
@@ -786,7 +786,10 @@ async function wanCall(url, apiName, data, sessionHash) {
     body: JSON.stringify({ data, session_hash: sessionHash })
   });
   if (callRes.status !== 404) {
-    if (!callRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${callRes.status}`);
+    if (!callRes.ok) {
+      const bodyText = await callRes.text().catch(() => '');
+      throw new Error(`${apiName} 호출 실패 HTTP ${callRes.status} ${bodyText.slice(0, 200)}`);
+    }
     const joined = await callRes.json();
     const eventId = joined.event_id;
     if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
@@ -798,10 +801,13 @@ async function wanCall(url, apiName, data, sessionHash) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data, session_hash: sessionHash })
   });
-  if (!apiRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} (/call, /api 둘 다 실패)`);
+  if (!apiRes.ok) {
+    const bodyText = await apiRes.text().catch(() => '');
+    throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} (/call, /api 둘 다 실패) ${bodyText.slice(0, 200)}`);
+  }
   const result = await apiRes.json();
   if (result.data) return result.data;
-  throw new Error(`${apiName}: 응답에 data가 없습니다`);
+  throw new Error(`${apiName}: 응답에 data가 없습니다 (응답: ${JSON.stringify(result).slice(0, 200)})`);
 }
 
 // 결과 데이터에서 이미지로 보이는 항목(재귀 탐색: {path/url}, {data: data-url} 등)을 찾음
