@@ -231,21 +231,17 @@
             <button class="sd-btn" onclick="connectSD()">Wan2gp 연결 확인</button>
           </div>
           <div class="sd-row">
-            <span style="font-size:12px; color:var(--muted); width: 70px;">모델 선택</span>
-            <select class="sd-input" id="sd-model" style="cursor:pointer;">
-              <option value="1.3B">1.3B (RTX 3060 권장, 빠름)</option>
-              <option value="14B">14B (고품질, 느림)</option>
+            <span style="font-size:12px; color:var(--muted); width: 70px;">해상도</span>
+            <select class="sd-input" id="sd-resolution" style="cursor:pointer;">
+              <option value="832x624">832x624 (가로)</option>
+              <option value="624x832">624x832 (세로)</option>
+              <option value="720x720">720x720 (정방형)</option>
+              <option value="832x480">832x480 (와이드)</option>
+              <option value="480x832">480x832 (숏폼 세로)</option>
             </select>
           </div>
-          <div class="sd-row">
-            <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
-              <span style="font-size:10px; color:var(--muted);">이미지 너비 (<span id="sd-width-val">256</span>px)</span>
-              <input type="range" id="sd-width" min="128" max="768" step="64" value="256" oninput="document.getElementById('sd-width-val').innerText=this.value">
-            </div>
-            <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
-              <span style="font-size:10px; color:var(--muted);">이미지 높이 (<span id="sd-height-val">256</span>px)</span>
-              <input type="range" id="sd-height" min="128" max="768" step="64" value="256" oninput="document.getElementById('sd-height-val').innerText=this.value">
-            </div>
+          <div style="font-size:10px; color:var(--muted); line-height:1.5;">
+            ※ 이미지 생성 모델(Z Image Turbo / Flux 등)은 Wan2GP 웹 UI에서 미리 선택해두세요. 이 도구는 현재 Wan2GP에 설정된 모델로 프롬프트만 전달합니다.
           </div>
         </div>
       </div>
@@ -699,19 +695,150 @@ function checkReady() {
   UI.renderBtn.disabled = !(state.images.length > 0 && state.audio && state.scenes.length > 0);
 }
 
-// ─── Wan2GP Local API ───
+// ─── Wan2GP (WanGP) Local Gradio API ───
+// WanGP는 고정 REST 엔드포인트가 아니라 Gradio Blocks 큐 API(/config, /call/<api_name>)를 사용합니다.
+// fn_index/파라미터 순서를 하드코딩하지 않고, 매 호출마다 /config 에서 실제 구성을 읽어와
+// 해당 함수의 입력 컴포넌트 기본값 위로 우리가 원하는 값(prompt/resolution/seed)만 덮어씁니다.
+const WAN = { configCache: null, sessionHash: null };
+
+function wanSessionHash() {
+  if (!WAN.sessionHash) WAN.sessionHash = 'nf' + Math.random().toString(36).slice(2, 12);
+  return WAN.sessionHash;
+}
+
+async function wanGetConfig(url, force = false) {
+  if (!force && WAN.configCache && WAN.configCache.url === url) return WAN.configCache.config;
+  const res = await fetch(`${url}/config`);
+  if (!res.ok) throw new Error(`Wan2GP 설정 조회 실패 HTTP ${res.status}`);
+  const config = await res.json();
+  WAN.configCache = { url, config };
+  return config;
+}
+
+function wanFindDependency(config, apiName) {
+  const dep = (config.dependencies || []).find(d => d.api_name === apiName);
+  if (!dep) throw new Error(`Wan2GP API "${apiName}"를 찾지 못했습니다 (버전이 다르거나 UI가 변경됨)`);
+  return dep;
+}
+
+function wanComponentById(config, id) {
+  return (config.components || []).find(c => c.id === id);
+}
+
+// dep의 입력 컴포넌트 기본값으로 데이터 배열을 만들고, 라벨에 overrides 키가 포함되면 그 값으로 교체
+function wanBuildData(config, dep, overrides) {
+  const inputs = dep.inputs || [];
+  const data = inputs.map(id => {
+    const comp = wanComponentById(config, id);
+    const v = comp && comp.props ? comp.props.value : null;
+    return v === undefined ? null : v;
+  });
+  inputs.forEach((id, idx) => {
+    const comp = wanComponentById(config, id);
+    const label = (comp && comp.props && comp.props.label ? comp.props.label : '').toLowerCase();
+    if (!label) return;
+    for (const key in overrides) {
+      if (label.includes(key)) data[idx] = overrides[key];
+    }
+  });
+  return data;
+}
+
+// Gradio 4.x+ 의 /call/<api_name> (POST로 큐 등록 후 SSE로 결과 스트리밍) 방식 호출
+async function wanCall(url, apiName, data, sessionHash) {
+  const postRes = await fetch(`${url}/call/${apiName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data, session_hash: sessionHash })
+  });
+  if (!postRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${postRes.status}`);
+  const joined = await postRes.json();
+  const eventId = joined.event_id;
+  if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
+
+  const streamRes = await fetch(`${url}/call/${apiName}/${eventId}`);
+  if (!streamRes.ok || !streamRes.body) throw new Error(`${apiName} 결과 스트림 연결 실패`);
+
+  const reader = streamRes.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let lastEvent = 'message';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('event:')) { lastEvent = line.slice(6).trim(); continue; }
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      let parsed;
+      try { parsed = JSON.parse(payload); } catch(e) { continue; }
+      if (lastEvent === 'error') {
+        throw new Error(`${apiName}: ` + (Array.isArray(parsed) ? parsed.join(', ') : String(parsed)));
+      }
+      if (lastEvent === 'complete') {
+        return parsed;
+      }
+      // 'generating' 등 중간 진행 이벤트는 건너뛰고 계속 스트림을 읽음
+    }
+  }
+  throw new Error(`${apiName}: 완료 신호 없이 스트림이 종료되었습니다`);
+}
+
+// 결과 데이터에서 이미지로 보이는 항목(재귀 탐색: {path/url}, {data: data-url} 등)을 찾음
+function wanExtractImage(node) {
+  if (!node) return null;
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const found = wanExtractImage(node[i]);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof node === 'object') {
+    if (typeof node.url === 'string' && /\.(png|jpe?g|webp)(\?|$)/i.test(node.url)) return node;
+    if (typeof node.path === 'string' && /\.(png|jpe?g|webp)$/i.test(node.path)) return node;
+    if (typeof node.data === 'string' && node.data.startsWith('data:image')) return node;
+    if (node.image) { const found = wanExtractImage(node.image); if (found) return found; }
+    for (const key in node) {
+      if (key === 'image' || key === 'url' || key === 'path' || key === 'data') continue;
+      const found = wanExtractImage(node[key]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+async function wanFetchImageBlob(baseUrl, imgInfo) {
+  if (typeof imgInfo.data === 'string' && imgInfo.data.startsWith('data:')) {
+    const res = await fetch(imgInfo.data);
+    return await res.blob();
+  }
+  let fileUrl = imgInfo.url;
+  if (!fileUrl && imgInfo.path) fileUrl = `${baseUrl}/file=${imgInfo.path}`;
+  if (!fileUrl) throw new Error('이미지 URL을 확인할 수 없습니다');
+  if (fileUrl.startsWith('/')) fileUrl = baseUrl + fileUrl;
+  const res = await fetch(fileUrl);
+  if (!res.ok) throw new Error(`이미지 다운로드 실패 HTTP ${res.status}`);
+  return await res.blob();
+}
+
 async function connectSD() {
   const url = document.getElementById('sd-url').value.trim().replace(/\/$/, '');
   addLog(`Wan2GP API 연결 시도: ${url}`, 'info');
   try {
-    const res = await fetch(`${url}/api/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: ['connection test', '1.3B', 'Default', 256, 256] })
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const config = await wanGetConfig(url, true);
+    const required = ['save_inputs', 'process_prompt_and_add_tasks', 'finalize_generation'];
+    const missing = required.filter(name => !(config.dependencies || []).some(d => d.api_name === name));
+    if (missing.length) {
+      addLog(`Wan2GP는 연결됐지만 일부 API를 찾지 못했습니다: ${missing.join(', ')} (버전 차이일 수 있음)`, 'err');
+    } else {
+      addLog(`Wan2GP 연결 성공! 이미지 생성이 가능합니다.`, 'ok');
+    }
     state.sdConnected = true;
-    addLog(`Wan2GP 연결 성공! 이미지 생성이 가능합니다.`, 'ok');
   } catch(e) {
     addLog(`Wan2GP API 연결 실패: ${e.message}`, 'err');
     state.sdConnected = false;
@@ -746,31 +873,42 @@ async function generateSceneImage(idx) {
   // JSON 파일에 영문 프롬프트가 있으면 그것을 우선 사용, 없으면 한글 대사 사용
   let basePrompt = state.imagePrompts && state.imagePrompts[idx] ? state.imagePrompts[idx] : state.scenes[idx].text;
   const prompt = basePrompt + ", masterpiece, best quality, highly detailed, realistic photo, cinematic, no text, no watermark";
+  const resolution = document.getElementById('sd-resolution').value;
 
-  const model = document.getElementById('sd-model').value;
-  const width = parseInt(document.getElementById('sd-width').value);
-  const height = parseInt(document.getElementById('sd-height').value);
-
-  addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP ${model})`, 'info');
+  addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP, ${resolution})`, 'info');
 
   try {
-    const res = await fetch(`${url}/api/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: [prompt, model, 'Default', width, height] })
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!data.data || !data.data[0]) throw new Error("응답에 이미지가 없습니다");
-    let base64 = data.data[0];
-    if (typeof base64 === 'string' && base64.startsWith('data:')) {
-      base64 = base64.split(',')[1];
+    const config = await wanGetConfig(url);
+    const sessionHash = wanSessionHash();
+
+    // 1) 프롬프트/해상도/시드를 Wan2GP 상태에 저장
+    const saveDep = wanFindDependency(config, 'save_inputs');
+    const saveData = wanBuildData(config, saveDep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
+    await wanCall(url, 'save_inputs', saveData, sessionHash);
+
+    // 2) 생성 작업 큐에 등록
+    const addDep = wanFindDependency(config, 'process_prompt_and_add_tasks');
+    const addData = wanBuildData(config, addDep, {});
+    await wanCall(url, 'process_prompt_and_add_tasks', addData, sessionHash);
+
+    // 3) 생성 파이프라인 실행 (존재하는 단계만, 버전별로 일부 없을 수 있음)
+    for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
+      if ((config.dependencies || []).some(d => d.api_name === step)) {
+        const dep = wanFindDependency(config, step);
+        const data = wanBuildData(config, dep, {});
+        await wanCall(url, step, data, sessionHash);
+      }
     }
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], {type: 'image/png'});
+
+    // 4) 결과 갤러리 확정 및 조회
+    const finDep = wanFindDependency(config, 'finalize_generation');
+    const finData = wanBuildData(config, finDep, {});
+    const output = await wanCall(url, 'finalize_generation', finData, sessionHash);
+
+    const imgInfo = wanExtractImage(output);
+    if (!imgInfo) throw new Error("생성 결과에서 이미지를 찾지 못했습니다");
+
+    const blob = await wanFetchImageBlob(url, imgInfo);
     const fileName = `gen_scene_${String(idx+1).padStart(2,'0')}.png`;
     blob.name = fileName;
 
