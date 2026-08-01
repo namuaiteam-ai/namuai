@@ -1042,23 +1042,6 @@ async function wanFetchImageBlob(baseUrl, imgInfo) {
 // process_prompt_and_add_tasks(state, current_gallery_tab, model_choice) 시그니처가 고정이므로
 // inputs[0]=state 컴포넌트 id, inputs[2]=model_choice(모델 선택 드롭다운) 컴포넌트 id로 확정 가능.
 // 그 드롭다운의 실제 choices를 읽어와 우리 UI의 모델 선택창을 채움 (추측 없이 실제 값 그대로).
-// process_prompt_and_add_tasks 3번째 입력이 model_choice일 거라 가정했지만 실제로는
-// 다른(LoRA 프리셋) 드롭다운이었음. 위치 추측 대신, "실제 모델 이름은 대부분 파라미터
-// 수(예: 8.9B, 14B)를 포함한다"는 특징으로 진짜 모델 드롭다운을 찾음.
-const WAN_MODEL_NAME_HINT = /\d+(\.\d+)?B\b/;
-
-function wanFindModelChoiceComponent(config) {
-  const comps = config.components || [];
-  let best = null;
-  for (const c of comps) {
-    if (!c.props || !Array.isArray(c.props.choices)) continue;
-    const texts = c.props.choices.map(ch => String(Array.isArray(ch) ? ch[0] : ch));
-    const hits = texts.filter(t => WAN_MODEL_NAME_HINT.test(t)).length;
-    if (hits > 0 && (!best || hits > best.hits)) best = { comp: c, hits };
-  }
-  return best ? best.comp : null;
-}
-
 function wanFindStateComponent(config, dep) {
   const inputs = dep.inputs || [];
   for (const id of inputs) {
@@ -1072,7 +1055,15 @@ function wanPopulateModelDropdown(config) {
   const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
   WAN.stateCompId = wanFindStateComponent(config, add.dep);
 
-  const modelComp = wanFindModelChoiceComponent(config);
+  // process_prompt_and_add_tasks(state, current_gallery_tab, model_choice) — 입력이 정확히
+  // 3개뿐이므로, state 타입과 number 타입을 빼고 남는 dropdown이 곧 진짜 model_choice.
+  // (전역 이름/패턴 매칭은 실제와 다른 컴포넌트를 잘못 골랐음 - 이 dependency 내에서 타입으로 확정)
+  let modelComp = null;
+  for (const id of add.dep.inputs) {
+    const c = wanComponentById(config, id);
+    if (c && c.type === 'dropdown') { modelComp = c; break; }
+  }
+
   const sel = document.getElementById('sd-model');
   sel.innerHTML = '';
   if (!modelComp) {
