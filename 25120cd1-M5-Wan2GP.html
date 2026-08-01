@@ -1066,8 +1066,14 @@ async function generateSceneImage(idx) {
     await wanEnsureModelState(url, config, sessionHash);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
+    // wgp.py의 save_inputs(target, ...) 첫 인자 target이 "state"가 아니면(기본값은 아마 "settings",
+    // 파일로만 저장) get_model_settings(state, model_type)이 None을 반환해서 다음 단계가
+    // "Webform can not be used..."로 실패함. target을 명시적으로 "state"로 강제 지정.
     const save = wanFindDependency(config, 'save_inputs');
-    await wanCallDep(url, config, save.dep, save.index, sessionHash, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
+    const saveData = wanBuildData(config, save.dep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
+    saveData[0] = 'state';
+    const saveOutput = await wanCall(url, save.index, saveData, sessionHash);
+    wanRecordOutputs(save.dep, saveOutput);
 
     // 2) 생성 작업 큐에 등록 (1번에서 갱신된 state를 그대로 이어받음)
     const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
