@@ -744,8 +744,8 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
-async function wanReadCallStream(url, apiName, eventId) {
-  const streamRes = await fetch(`${url}/call/${apiName}/${eventId}`);
+async function wanReadCallStream(base, apiName, eventId) {
+  const streamRes = await fetch(`${base}/call/${apiName}/${eventId}`);
   if (!streamRes.ok || !streamRes.body) throw new Error(`${apiName} 결과 스트림 연결 실패`);
 
   const reader = streamRes.body.getReader();
@@ -777,15 +777,15 @@ async function wanReadCallStream(url, apiName, eventId) {
   throw new Error(`${apiName}: 완료 신호 없이 스트림이 종료되었습니다`);
 }
 
-// Gradio 버전에 따라 API 경로가 다름: 신버전(5.x)은 /call/<api_name>(POST+SSE),
-// 구버전(3.x/4.x)은 /api/<api_name>(POST 한 번으로 동기 응답). 순서대로 시도해서 되는 쪽을 사용.
-async function wanCall(url, apiName, data, sessionHash) {
-  const callRes = await fetch(`${url}/call/${apiName}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data, session_hash: sessionHash })
-  });
-  if (callRes.status !== 404) {
+async function wanCallWithStyle(url, apiName, data, sessionHash, styleStyle, prefix) {
+  const base = `${url}${prefix}`;
+  if (styleStyle === 'call') {
+    const callRes = await fetch(`${base}/call/${apiName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, session_hash: sessionHash })
+    });
+    if (callRes.status === 404) { const e = new Error('404'); e.isNotFound = true; throw e; }
     if (!callRes.ok) {
       const bodyText = await callRes.text().catch(() => '');
       throw new Error(`${apiName} 호출 실패 HTTP ${callRes.status} ${bodyText.slice(0, 200)}`);
@@ -793,21 +793,50 @@ async function wanCall(url, apiName, data, sessionHash) {
     const joined = await callRes.json();
     const eventId = joined.event_id;
     if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
-    return await wanReadCallStream(url, apiName, eventId);
+    return await wanReadCallStream(base, apiName, eventId);
+  } else {
+    const apiRes = await fetch(`${base}/api/${apiName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, session_hash: sessionHash })
+    });
+    if (apiRes.status === 404) { const e = new Error('404'); e.isNotFound = true; throw e; }
+    if (!apiRes.ok) {
+      const bodyText = await apiRes.text().catch(() => '');
+      throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} ${bodyText.slice(0, 200)}`);
+    }
+    const result = await apiRes.json();
+    if (result.data) return result.data;
+    throw new Error(`${apiName}: 응답에 data가 없습니다 (응답: ${JSON.stringify(result).slice(0, 200)})`);
   }
+}
 
-  const apiRes = await fetch(`${url}/api/${apiName}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data, session_hash: sessionHash })
-  });
-  if (!apiRes.ok) {
-    const bodyText = await apiRes.text().catch(() => '');
-    throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} (/call, /api 둘 다 실패) ${bodyText.slice(0, 200)}`);
+// Gradio 버전/마운트 방식에 따라 실제 API 경로가 다를 수 있음:
+//  - Gradio 5.x 기본: /gradio_api/call/<api_name> (POST 큐등록 + SSE)
+//  - Gradio 5.x 구형/일부: /call/<api_name>
+//  - Gradio 3.x/4.x: /api/<api_name> (동기 POST), 또는 /gradio_api/api/<api_name>
+// 404가 아닌 응답이 나올 때까지 순서대로 시도하고, 성공한 조합은 캐시해서 다음 호출부턴 바로 사용.
+const WAN_ENDPOINT_STYLES = [
+  { style: 'call', prefix: '/gradio_api' },
+  { style: 'call', prefix: '' },
+  { style: 'api', prefix: '/gradio_api' },
+  { style: 'api', prefix: '' },
+];
+
+async function wanCall(url, apiName, data, sessionHash) {
+  const candidates = WAN.endpointStyle ? [WAN.endpointStyle] : WAN_ENDPOINT_STYLES;
+  let lastErr = null;
+  for (const c of candidates) {
+    try {
+      const result = await wanCallWithStyle(url, apiName, data, sessionHash, c.style, c.prefix);
+      WAN.endpointStyle = c;
+      return result;
+    } catch(e) {
+      if (e.isNotFound) { lastErr = e; continue; }
+      throw e;
+    }
   }
-  const result = await apiRes.json();
-  if (result.data) return result.data;
-  throw new Error(`${apiName}: 응답에 data가 없습니다 (응답: ${JSON.stringify(result).slice(0, 200)})`);
+  throw new Error(`${apiName}: 사용 가능한 Wan2GP API 경로를 찾지 못했습니다 (/gradio_api, /call, /api 조합 모두 404)`);
 }
 
 // 결과 데이터에서 이미지로 보이는 항목(재귀 탐색: {path/url}, {data: data-url} 등)을 찾음
