@@ -744,6 +744,34 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
+// 페이지가 브라우저에서 열릴 때 자동 실행되는 load 이벤트를 찾음 (세션별 상태를 서버에 등록하는 역할로 추정)
+function wanFindLoadDependency(config) {
+  const deps = config.dependencies || [];
+  for (let i = 0; i < deps.length; i++) {
+    const d = deps[i];
+    const targets = d.targets || [];
+    const isLoad = d.trigger === 'load' || targets.some(t => Array.isArray(t) ? t[1] === 'load' : false);
+    if (isLoad) return { dep: d, index: i };
+  }
+  return null;
+}
+
+// 우리가 만든 session_hash를 서버가 알도록, save_inputs 등을 호출하기 전에 load 이벤트를 한 번 실행
+async function wanEnsureSession(url, config, sessionHash) {
+  if (WAN.sessionInitialized) return;
+  const loadInfo = wanFindLoadDependency(config);
+  if (loadInfo) {
+    const apiId = loadInfo.dep.api_name || String(loadInfo.index);
+    const loadData = wanBuildData(config, loadInfo.dep, {});
+    try {
+      await wanCall(url, apiId, loadData, sessionHash);
+    } catch(e) {
+      addLog(`세션 초기화(load) 호출 실패, 계속 진행: ${e.message}`, 'info');
+    }
+  }
+  WAN.sessionInitialized = true;
+}
+
 async function wanReadCallStream(base, apiName, eventId) {
   const streamRes = await fetch(`${base}/call/${apiName}/${eventId}`);
   if (!streamRes.ok || !streamRes.body) throw new Error(`${apiName} 결과 스트림 연결 실패`);
@@ -931,6 +959,7 @@ async function generateSceneImage(idx) {
   try {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
+    await wanEnsureSession(url, config, sessionHash);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태에 저장
     const saveDep = wanFindDependency(config, 'save_inputs');
