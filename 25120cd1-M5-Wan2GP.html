@@ -231,6 +231,12 @@
             <button class="sd-btn" onclick="connectSD()">Wan2gp 연결 확인</button>
           </div>
           <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">모델</span>
+            <select class="sd-input" id="sd-model" style="cursor:pointer;">
+              <option value="">먼저 "연결 확인"을 눌러주세요</option>
+            </select>
+          </div>
+          <div class="sd-row">
             <span style="font-size:12px; color:var(--muted); width: 70px;">해상도</span>
             <select class="sd-input" id="sd-resolution" style="cursor:pointer;">
               <option value="832x624">832x624 (4:3)</option>
@@ -241,7 +247,7 @@
             </select>
           </div>
           <div style="font-size:10px; color:var(--muted); line-height:1.5;">
-            ※ 이미지 생성 모델(Z Image Turbo / Flux 등)은 Wan2GP 웹 UI에서 미리 선택해두세요. 이 도구는 현재 Wan2GP에 설정된 모델로 프롬프트만 전달합니다.
+            ※ 모델 목록은 "연결 확인"을 누르면 Wan2GP에서 실제 등록된 모델 목록을 그대로 가져와 채워집니다. 이미 다운로드된(사용 중인) 모델을 선택하세요 — 새 모델은 자동으로 다운로드를 시도합니다.
           </div>
         </div>
       </div>
@@ -828,21 +834,21 @@ async function wanTriggerLoadEvents(url, config, sessionHash) {
 // wgp.py의 change_model(state, model_choice)이 state["model_type"] = model_choice 를 세팅함.
 // 이걸 한 번 호출해두지 않으면 process_prompt_and_add_tasks가 model_type 불일치로
 // "Webform can not be used..." 에러를 던짐.
-async function wanEnsureModelState(url, config, sessionHash) {
-  if (WAN.modelPrimed) return;
-  WAN.modelPrimed = true;
-  if (!(config.dependencies || []).some(d => d.api_name === 'change_model')) {
-    addLog(`change_model API를 찾지 못해 건너뜀 (버전 차이일 수 있음)`, 'info');
-    return;
-  }
-  const found = wanFindDependency(config, 'change_model');
-  addLog(`change_model 호출 중 (모델 상태 초기화)...`, 'info');
-  try {
-    const out = await wanCallDep(url, config, found.dep, found.index, sessionHash, {});
-    addLog(`change_model 완료: ${JSON.stringify(out).slice(0, 150)}`, 'info');
-  } catch(e) {
-    addLog(`change_model 호출 실패, 계속 진행: ${e.message}`, 'info');
-  }
+// /config의 state 기본값은 WanGP 공장 기본 모델(예: Wan2.1 14B t2v)을 가리키고 있어서,
+// 실제 화면에서 선택된 모델(Chroma/Z Image Turbo 등)과 다를 수 있음. change_model은 UI
+// 다단계 체인이라 API로 직접 호출하기 어려우므로, state 사본을 우리가 직접 만들어
+// model_type만 원하는 값으로 바꿔치기해서 WAN.componentValues에 심어둠. 이후 모든 호출은
+// 이 값을 그대로 이어받음 (wanBuildData가 componentValues를 우선하므로).
+function wanSeedModelType(config, desiredModel) {
+  if (!WAN.stateCompId || !desiredModel) return;
+  const stateComp = wanComponentById(config, WAN.stateCompId);
+  const baseState = (WAN.componentValues[WAN.stateCompId] !== undefined)
+    ? WAN.componentValues[WAN.stateCompId]
+    : (stateComp && stateComp.props ? stateComp.props.value : {});
+  const clonedState = JSON.parse(JSON.stringify(baseState || {}));
+  clonedState.model_type = desiredModel;
+  WAN.componentValues[WAN.stateCompId] = clonedState;
+  if (WAN.modelChoiceCompId) WAN.componentValues[WAN.modelChoiceCompId] = desiredModel;
 }
 
 // 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
@@ -1005,6 +1011,37 @@ async function wanFetchImageBlob(baseUrl, imgInfo) {
   throw lastErr || new Error('이미지 다운로드 실패');
 }
 
+// process_prompt_and_add_tasks(state, current_gallery_tab, model_choice) 시그니처가 고정이므로
+// inputs[0]=state 컴포넌트 id, inputs[2]=model_choice(모델 선택 드롭다운) 컴포넌트 id로 확정 가능.
+// 그 드롭다운의 실제 choices를 읽어와 우리 UI의 모델 선택창을 채움 (추측 없이 실제 값 그대로).
+function wanPopulateModelDropdown(config) {
+  const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
+  const stateCompId = add.dep.inputs[0];
+  const modelChoiceCompId = add.dep.inputs[2];
+  WAN.stateCompId = stateCompId;
+  WAN.modelChoiceCompId = modelChoiceCompId;
+
+  const modelComp = wanComponentById(config, modelChoiceCompId);
+  const choices = (modelComp && modelComp.props && Array.isArray(modelComp.props.choices)) ? modelComp.props.choices : [];
+  const currentValue = modelComp && modelComp.props ? modelComp.props.value : null;
+
+  const sel = document.getElementById('sd-model');
+  sel.innerHTML = '';
+  if (!choices.length) {
+    sel.innerHTML = '<option value="">모델 목록을 가져오지 못함</option>';
+    return;
+  }
+  choices.forEach(c => {
+    const label = Array.isArray(c) ? c[0] : c;
+    const value = Array.isArray(c) ? c[1] : c;
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (value === currentValue) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
 async function connectSD() {
   const url = document.getElementById('sd-url').value.trim().replace(/\/$/, '');
   addLog(`Wan2GP API 연결 시도: ${url}`, 'info');
@@ -1017,6 +1054,7 @@ async function connectSD() {
     } else {
       addLog(`Wan2GP 연결 성공! 이미지 생성이 가능합니다.`, 'ok');
     }
+    wanPopulateModelDropdown(config);
     state.sdConnected = true;
   } catch(e) {
     addLog(`Wan2GP API 연결 실패: ${e.message}`, 'err');
@@ -1053,8 +1091,10 @@ async function generateSceneImage(idx) {
   let basePrompt = state.imagePrompts && state.imagePrompts[idx] ? state.imagePrompts[idx] : state.scenes[idx].text;
   const prompt = basePrompt + ", masterpiece, best quality, highly detailed, realistic photo, cinematic, no text, no watermark";
   const resolution = document.getElementById('sd-resolution').value;
+  const modelChoice = document.getElementById('sd-model').value;
+  if (!modelChoice) { alert("모델을 선택해주세요! (연결 확인을 먼저 눌러야 목록이 채워집니다)"); return; }
 
-  addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP, ${resolution})`, 'info');
+  addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution})`, 'info');
 
   try {
     const config = await wanGetConfig(url);
@@ -1063,7 +1103,8 @@ async function generateSceneImage(idx) {
     // 이제 wanCall 자체에 재시도 로직이 있어 불필요할 뿐 아니라, 이 호출의 출력값이
     // state의 model_type 기본값을 오염시켜 "Webform..." 에러를 유발하는 것으로 보여 비활성화.
     // await wanTriggerLoadEvents(url, config, sessionHash);
-    await wanEnsureModelState(url, config, sessionHash);
+    if (!WAN.stateCompId) wanPopulateModelDropdown(config); // 혹시 연결 확인을 안 거쳤으면 여기서 채움
+    wanSeedModelType(config, modelChoice);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태(gr.State)에 저장
     // wgp.py의 save_inputs(target, ...) 첫 인자 target이 "state"가 아니면(기본값은 아마 "settings",
