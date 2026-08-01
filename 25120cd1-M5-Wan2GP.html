@@ -768,6 +768,7 @@ function wanFindLoadDependencies(config) {
   const result = [];
   for (let i = 0; i < deps.length; i++) {
     const d = deps[i];
+    if (d.backend_fn === false) continue; // JS 전용 이벤트(백엔드 함수 없음)는 호출 대상에서 제외
     const targets = d.targets || [];
     const isLoad = d.trigger === 'load' || targets.some(t => Array.isArray(t) ? t[1] === 'load' : false);
     if (isLoad) result.push({ dep: d, index: i });
