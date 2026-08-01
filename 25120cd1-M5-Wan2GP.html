@@ -744,18 +744,7 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
-// Gradio 4.x+ 의 /call/<api_name> (POST로 큐 등록 후 SSE로 결과 스트리밍) 방식 호출
-async function wanCall(url, apiName, data, sessionHash) {
-  const postRes = await fetch(`${url}/call/${apiName}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data, session_hash: sessionHash })
-  });
-  if (!postRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${postRes.status}`);
-  const joined = await postRes.json();
-  const eventId = joined.event_id;
-  if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
-
+async function wanReadCallStream(url, apiName, eventId) {
   const streamRes = await fetch(`${url}/call/${apiName}/${eventId}`);
   if (!streamRes.ok || !streamRes.body) throw new Error(`${apiName} 결과 스트림 연결 실패`);
 
@@ -786,6 +775,33 @@ async function wanCall(url, apiName, data, sessionHash) {
     }
   }
   throw new Error(`${apiName}: 완료 신호 없이 스트림이 종료되었습니다`);
+}
+
+// Gradio 버전에 따라 API 경로가 다름: 신버전(5.x)은 /call/<api_name>(POST+SSE),
+// 구버전(3.x/4.x)은 /api/<api_name>(POST 한 번으로 동기 응답). 순서대로 시도해서 되는 쪽을 사용.
+async function wanCall(url, apiName, data, sessionHash) {
+  const callRes = await fetch(`${url}/call/${apiName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data, session_hash: sessionHash })
+  });
+  if (callRes.status !== 404) {
+    if (!callRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${callRes.status}`);
+    const joined = await callRes.json();
+    const eventId = joined.event_id;
+    if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
+    return await wanReadCallStream(url, apiName, eventId);
+  }
+
+  const apiRes = await fetch(`${url}/api/${apiName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data, session_hash: sessionHash })
+  });
+  if (!apiRes.ok) throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} (/call, /api 둘 다 실패)`);
+  const result = await apiRes.json();
+  if (result.data) return result.data;
+  throw new Error(`${apiName}: 응답에 data가 없습니다`);
 }
 
 // 결과 데이터에서 이미지로 보이는 항목(재귀 탐색: {path/url}, {data: data-url} 등)을 찾음
