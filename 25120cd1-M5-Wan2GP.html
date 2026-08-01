@@ -760,6 +760,35 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
+// 페이지가 브라우저에서 열릴 때 자동 실행되는 load 이벤트(들)를 찾음.
+// WanGP는 여기서 서버 인스턴스 식별값 등을 세션 상태에 심어두는 것으로 보이며,
+// 이게 없으면 "App has been restarted since the form was displayed" 에러가 남.
+function wanFindLoadDependencies(config) {
+  const deps = config.dependencies || [];
+  const result = [];
+  for (let i = 0; i < deps.length; i++) {
+    const d = deps[i];
+    const targets = d.targets || [];
+    const isLoad = d.trigger === 'load' || targets.some(t => Array.isArray(t) ? t[1] === 'load' : false);
+    if (isLoad) result.push({ dep: d, index: i });
+  }
+  return result;
+}
+
+async function wanTriggerLoadEvents(url, config, sessionHash) {
+  if (WAN.loadTriggered) return;
+  WAN.loadTriggered = true;
+  const loads = wanFindLoadDependencies(config);
+  for (const l of loads) {
+    const data = wanBuildData(config, l.dep, {});
+    try {
+      await wanCall(url, l.index, data, sessionHash);
+    } catch(e) {
+      addLog(`초기화(load) 이벤트 호출 실패, 계속 진행: ${e.message}`, 'info');
+    }
+  }
+}
+
 // 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
 function wanQueueDispatch(msg) {
   if (msg.msg === 'process_completed') {
@@ -958,6 +987,7 @@ async function generateSceneImage(idx) {
   try {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
+    await wanTriggerLoadEvents(url, config, sessionHash);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태에 저장
     const save = wanFindDependency(config, 'save_inputs');
