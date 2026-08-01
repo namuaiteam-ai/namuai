@@ -696,10 +696,13 @@ function checkReady() {
 }
 
 // ─── Wan2GP (WanGP) Local Gradio API ───
-// WanGP는 고정 REST 엔드포인트가 아니라 Gradio Blocks 큐 API(/config, /call/<api_name>)를 사용합니다.
-// fn_index/파라미터 순서를 하드코딩하지 않고, 매 호출마다 /config 에서 실제 구성을 읽어와
+// WanGP는 고정 REST 엔드포인트가 아니라 Gradio Blocks의 "구형" 큐 프로토콜을 씁니다:
+// POST /queue/join 으로 함수 호출(fn_index 기반)을 큐에 넣고, 세션당 하나 열어두는
+// GET /queue/data?session_hash=... SSE 스트림으로 결과를 돌려받습니다. 이 스트림이
+// 곧 "세션 등록"이기도 해서, 이게 없으면 다른 방식(/call, /api)은 전부 거부당했습니다.
+// fn_index/파라미터 순서는 하드코딩하지 않고, 매 호출마다 /config 에서 실제 구성을 읽어와
 // 해당 함수의 입력 컴포넌트 기본값 위로 우리가 원하는 값(prompt/resolution/seed)만 덮어씁니다.
-const WAN = { configCache: null, sessionHash: null };
+const WAN = { configCache: null, sessionHash: null, prefix: null, queueStream: null, queueWaiters: [] };
 
 function wanSessionHash() {
   if (!WAN.sessionHash) WAN.sessionHash = 'nf' + Math.random().toString(36).slice(2, 12);
@@ -715,10 +718,13 @@ async function wanGetConfig(url, force = false) {
   return config;
 }
 
+// 반환: { dep, index } — index가 곧 fn_index (dependencies 배열 순번)
 function wanFindDependency(config, apiName) {
-  const dep = (config.dependencies || []).find(d => d.api_name === apiName);
-  if (!dep) throw new Error(`Wan2GP API "${apiName}"를 찾지 못했습니다 (버전이 다르거나 UI가 변경됨)`);
-  return dep;
+  const deps = config.dependencies || [];
+  for (let i = 0; i < deps.length; i++) {
+    if (deps[i].api_name === apiName) return { dep: deps[i], index: i };
+  }
+  throw new Error(`Wan2GP API "${apiName}"를 찾지 못했습니다 (버전이 다르거나 UI가 변경됨)`);
 }
 
 function wanComponentById(config, id) {
@@ -744,9 +750,24 @@ function wanBuildData(config, dep, overrides) {
   return data;
 }
 
-// 실제 브라우저는 페이지 로드 시 /queue/data?session_hash=... 로 지속적인 SSE 연결을 맺어두는데,
-// 이게 서버 쪽에 "이 session_hash는 활성 상태"라고 등록하는 역할을 하는 것으로 보임.
-// 이 연결이 없으면 WanGP가 모든 함수 호출을 "Session not found"로 거부함.
+// 큐 결과 스트림(/queue/data)에서 온 메시지를 대기 중인 호출(FIFO)에 전달
+function wanQueueDispatch(msg) {
+  if (msg.msg === 'process_completed') {
+    const waiter = WAN.queueWaiters.shift();
+    if (!waiter) return;
+    const out = msg.output;
+    if (msg.success === false || (out && out.error)) {
+      waiter.reject(new Error((out && out.error) ? String(out.error) : 'process_completed 실패'));
+    } else {
+      waiter.resolve(out ? out.data : null);
+    }
+  } else if (msg.msg === 'unexpected_error') {
+    const waiter = WAN.queueWaiters.shift();
+    if (waiter) waiter.reject(new Error(msg.message || 'Wan2GP 알 수 없는 오류'));
+  }
+  // 'estimation'/'process_starts'/'process_generating'/'heartbeat' 등은 무시
+}
+
 function wanOpenQueueStream(url, prefix, sessionHash) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -757,125 +778,71 @@ function wanOpenQueueStream(url, prefix, sessionHash) {
     es.onopen = () => {
       if (!settled) { settled = true; clearTimeout(timer); resolve(es); }
     };
+    es.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch(e) { return; }
+      wanQueueDispatch(msg);
+    };
     es.onerror = () => {
       if (!settled) { settled = true; clearTimeout(timer); es.close(); reject(new Error('queue/data 연결 실패')); }
     };
   });
 }
 
-async function wanEnsureSession(url, config, sessionHash) {
-  if (WAN.sessionInitialized) return;
-  const prefixesToTry = (WAN.endpointStyle && WAN.endpointStyle.prefix !== undefined)
-    ? [WAN.endpointStyle.prefix]
-    : ['/gradio_api', ''];
+// 세션을 등록하는 지속 SSE 스트림을 (한 번만) 열어둠. 실제 함수 호출은 wanCall로 별도 수행.
+async function wanEnsureSession(url, sessionHash) {
+  if (WAN.queueStream) return;
+  const prefixesToTry = WAN.prefix !== null ? [WAN.prefix] : ['/gradio_api', ''];
   let lastErr = null;
   for (const prefix of prefixesToTry) {
     try {
       const es = await wanOpenQueueStream(url, prefix, sessionHash);
       WAN.queueStream = es;
-      WAN.sessionInitialized = true;
+      WAN.prefix = prefix;
       return;
     } catch(e) {
       lastErr = e;
     }
   }
-  addLog(`세션 등록용 큐 연결 실패, 계속 진행: ${lastErr ? lastErr.message : ''}`, 'info');
-  WAN.sessionInitialized = true;
+  throw new Error(`Wan2GP 큐 연결 실패: ${lastErr ? lastErr.message : ''}`);
 }
 
-async function wanReadCallStream(base, apiName, eventId) {
-  const streamRes = await fetch(`${base}/call/${apiName}/${eventId}`);
-  if (!streamRes.ok || !streamRes.body) throw new Error(`${apiName} 결과 스트림 연결 실패`);
-
-  const reader = streamRes.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let lastEvent = 'message';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
-      if (line.startsWith('event:')) { lastEvent = line.slice(6).trim(); continue; }
-      if (!line.startsWith('data:')) continue;
-      const payload = line.slice(5).trim();
-      if (!payload) continue;
-      let parsed;
-      try { parsed = JSON.parse(payload); } catch(e) { continue; }
-      if (lastEvent === 'error') {
-        throw new Error(`${apiName}: ` + (Array.isArray(parsed) ? parsed.join(', ') : String(parsed)));
+// POST /queue/join 으로 fn_index 호출을 큐에 넣고, 열려있는 /queue/data 스트림에서
+// 그 결과(process_completed)가 올 때까지 기다림. WanGP는 세션당 순차 처리이므로 FIFO로 매칭.
+async function wanCall(url, fnIndex, data, sessionHash) {
+  await wanEnsureSession(url, sessionHash);
+  return await new Promise((resolvePromise, rejectPromise) => {
+    let timeoutId;
+    const waiter = {
+      resolve: (v) => { clearTimeout(timeoutId); resolvePromise(v); },
+      reject: (e) => { clearTimeout(timeoutId); rejectPromise(e); }
+    };
+    WAN.queueWaiters.push(waiter);
+    timeoutId = setTimeout(() => {
+      const idx = WAN.queueWaiters.indexOf(waiter);
+      if (idx !== -1) {
+        WAN.queueWaiters.splice(idx, 1);
+        waiter.reject(new Error('Wan2GP 응답 타임아웃 (180초)'));
       }
-      if (lastEvent === 'complete') {
-        return parsed;
-      }
-      // 'generating' 등 중간 진행 이벤트는 건너뛰고 계속 스트림을 읽음
-    }
-  }
-  throw new Error(`${apiName}: 완료 신호 없이 스트림이 종료되었습니다`);
-}
+    }, 180000);
 
-async function wanCallWithStyle(url, apiName, data, sessionHash, styleStyle, prefix) {
-  const base = `${url}${prefix}`;
-  if (styleStyle === 'call') {
-    const callRes = await fetch(`${base}/call/${apiName}`, {
+    fetch(`${url}${WAN.prefix}/queue/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data, session_hash: sessionHash })
+      body: JSON.stringify({ data, event_data: null, fn_index: fnIndex, session_hash: sessionHash, trigger_id: null })
+    }).then(async (res) => {
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        const idx = WAN.queueWaiters.indexOf(waiter);
+        if (idx !== -1) WAN.queueWaiters.splice(idx, 1);
+        waiter.reject(new Error(`queue/join 실패 HTTP ${res.status} ${bodyText.slice(0, 200)}`));
+      }
+    }).catch((e) => {
+      const idx = WAN.queueWaiters.indexOf(waiter);
+      if (idx !== -1) WAN.queueWaiters.splice(idx, 1);
+      waiter.reject(e);
     });
-    if (callRes.status === 404) { const e = new Error('404'); e.isNotFound = true; throw e; }
-    if (!callRes.ok) {
-      const bodyText = await callRes.text().catch(() => '');
-      throw new Error(`${apiName} 호출 실패 HTTP ${callRes.status} ${bodyText.slice(0, 200)}`);
-    }
-    const joined = await callRes.json();
-    const eventId = joined.event_id;
-    if (!eventId) throw new Error(`${apiName}: event_id를 받지 못했습니다`);
-    return await wanReadCallStream(base, apiName, eventId);
-  } else {
-    const apiRes = await fetch(`${base}/api/${apiName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data, session_hash: sessionHash })
-    });
-    if (apiRes.status === 404) { const e = new Error('404'); e.isNotFound = true; throw e; }
-    if (!apiRes.ok) {
-      const bodyText = await apiRes.text().catch(() => '');
-      throw new Error(`${apiName} 호출 실패 HTTP ${apiRes.status} ${bodyText.slice(0, 200)}`);
-    }
-    const result = await apiRes.json();
-    if (result.data) return result.data;
-    throw new Error(`${apiName}: 응답에 data가 없습니다 (응답: ${JSON.stringify(result).slice(0, 200)})`);
-  }
-}
-
-// Gradio 버전/마운트 방식에 따라 실제 API 경로가 다를 수 있음:
-//  - Gradio 5.x 기본: /gradio_api/call/<api_name> (POST 큐등록 + SSE)
-//  - Gradio 5.x 구형/일부: /call/<api_name>
-//  - Gradio 3.x/4.x: /api/<api_name> (동기 POST), 또는 /gradio_api/api/<api_name>
-// 404가 아닌 응답이 나올 때까지 순서대로 시도하고, 성공한 조합은 캐시해서 다음 호출부턴 바로 사용.
-const WAN_ENDPOINT_STYLES = [
-  { style: 'call', prefix: '/gradio_api' },
-  { style: 'call', prefix: '' },
-  { style: 'api', prefix: '/gradio_api' },
-  { style: 'api', prefix: '' },
-];
-
-async function wanCall(url, apiName, data, sessionHash) {
-  const candidates = WAN.endpointStyle ? [WAN.endpointStyle] : WAN_ENDPOINT_STYLES;
-  let lastErr = null;
-  for (const c of candidates) {
-    try {
-      const result = await wanCallWithStyle(url, apiName, data, sessionHash, c.style, c.prefix);
-      WAN.endpointStyle = c;
-      return result;
-    } catch(e) {
-      if (e.isNotFound) { lastErr = e; continue; }
-      throw e;
-    }
-  }
-  throw new Error(`${apiName}: 사용 가능한 Wan2GP API 경로를 찾지 못했습니다 (/gradio_api, /call, /api 조합 모두 404)`);
+  });
 }
 
 // 결과 데이터에서 이미지로 보이는 항목(재귀 탐색: {path/url}, {data: data-url} 등)을 찾음
@@ -908,12 +875,23 @@ async function wanFetchImageBlob(baseUrl, imgInfo) {
     return await res.blob();
   }
   let fileUrl = imgInfo.url;
-  if (!fileUrl && imgInfo.path) fileUrl = `${baseUrl}/file=${imgInfo.path}`;
-  if (!fileUrl) throw new Error('이미지 URL을 확인할 수 없습니다');
-  if (fileUrl.startsWith('/')) fileUrl = baseUrl + fileUrl;
-  const res = await fetch(fileUrl);
-  if (!res.ok) throw new Error(`이미지 다운로드 실패 HTTP ${res.status}`);
-  return await res.blob();
+  if (fileUrl) {
+    if (fileUrl.startsWith('/')) fileUrl = baseUrl + fileUrl;
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`이미지 다운로드 실패 HTTP ${res.status}`);
+    return await res.blob();
+  }
+  if (!imgInfo.path) throw new Error('이미지 URL을 확인할 수 없습니다');
+  const prefixesToTry = WAN.prefix !== null ? [WAN.prefix, WAN.prefix === '' ? '/gradio_api' : ''] : ['/gradio_api', ''];
+  let lastErr = null;
+  for (const prefix of prefixesToTry) {
+    try {
+      const res = await fetch(`${baseUrl}${prefix}/file=${imgInfo.path}`);
+      if (res.ok) return await res.blob();
+      lastErr = new Error(`이미지 다운로드 실패 HTTP ${res.status}`);
+    } catch(e) { lastErr = e; }
+  }
+  throw lastErr || new Error('이미지 다운로드 실패');
 }
 
 async function connectSD() {
@@ -970,31 +948,30 @@ async function generateSceneImage(idx) {
   try {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
-    await wanEnsureSession(url, config, sessionHash);
 
     // 1) 프롬프트/해상도/시드를 Wan2GP 상태에 저장
-    const saveDep = wanFindDependency(config, 'save_inputs');
-    const saveData = wanBuildData(config, saveDep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
-    await wanCall(url, 'save_inputs', saveData, sessionHash);
+    const save = wanFindDependency(config, 'save_inputs');
+    const saveData = wanBuildData(config, save.dep, { 'prompt': prompt, 'resolution': resolution, 'seed': -1 });
+    await wanCall(url, save.index, saveData, sessionHash);
 
     // 2) 생성 작업 큐에 등록
-    const addDep = wanFindDependency(config, 'process_prompt_and_add_tasks');
-    const addData = wanBuildData(config, addDep, {});
-    await wanCall(url, 'process_prompt_and_add_tasks', addData, sessionHash);
+    const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
+    const addData = wanBuildData(config, add.dep, {});
+    await wanCall(url, add.index, addData, sessionHash);
 
     // 3) 생성 파이프라인 실행 (존재하는 단계만, 버전별로 일부 없을 수 있음)
     for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
       if ((config.dependencies || []).some(d => d.api_name === step)) {
-        const dep = wanFindDependency(config, step);
-        const data = wanBuildData(config, dep, {});
-        await wanCall(url, step, data, sessionHash);
+        const s = wanFindDependency(config, step);
+        const data = wanBuildData(config, s.dep, {});
+        await wanCall(url, s.index, data, sessionHash);
       }
     }
 
     // 4) 결과 갤러리 확정 및 조회
-    const finDep = wanFindDependency(config, 'finalize_generation');
-    const finData = wanBuildData(config, finDep, {});
-    const output = await wanCall(url, 'finalize_generation', finData, sessionHash);
+    const fin = wanFindDependency(config, 'finalize_generation');
+    const finData = wanBuildData(config, fin.dep, {});
+    const output = await wanCall(url, fin.index, finData, sessionHash);
 
     const imgInfo = wanExtractImage(output);
     if (!imgInfo) throw new Error("생성 결과에서 이미지를 찾지 못했습니다");
