@@ -1178,10 +1178,11 @@ async function generateSceneImage(idx) {
   try {
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
-    // load 이벤트 호출은 세션 등록 실패("Session not found")를 해결하려던 것이었는데,
-    // 이제 wanCall 자체에 재시도 로직이 있어 불필요할 뿐 아니라, 이 호출의 출력값이
-    // state의 model_type 기본값을 오염시켜 "Webform..." 에러를 유발하는 것으로 보여 비활성화.
-    // await wanTriggerLoadEvents(url, config, sessionHash);
+    // load 이벤트를 다시 활성화. 예전엔 이게 model_type을 오염시킨다고 의심해서 껐었는데,
+    // 실제 원인은 해상도/target 값이었던 것으로 판명남. 지금 "state가 비어서 extra_generation 등
+    // 내부 필드가 없다"는 새 에러가 나서, load 이벤트가 채워주는 값이 필요할 수 있어 다시 켬.
+    // wanSeedModelType이 이 결과를 baseState로 우선 사용하므로 model_type만 덮어써짐.
+    await wanTriggerLoadEvents(url, config, sessionHash);
     if (!WAN.stateCompId) wanPopulateModelDropdown(config); // 혹시 연결 확인을 안 거쳤으면 여기서 채움
     wanSeedModelType(config, modelChoice);
     await wanApplyModelViaTarget(url, config, sessionHash, modelChoice);
