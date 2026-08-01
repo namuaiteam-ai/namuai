@@ -831,10 +831,15 @@ async function wanTriggerLoadEvents(url, config, sessionHash) {
 async function wanEnsureModelState(url, config, sessionHash) {
   if (WAN.modelPrimed) return;
   WAN.modelPrimed = true;
-  if (!(config.dependencies || []).some(d => d.api_name === 'change_model')) return;
+  if (!(config.dependencies || []).some(d => d.api_name === 'change_model')) {
+    addLog(`change_model API를 찾지 못해 건너뜀 (버전 차이일 수 있음)`, 'info');
+    return;
+  }
   const found = wanFindDependency(config, 'change_model');
+  addLog(`change_model 호출 중 (모델 상태 초기화)...`, 'info');
   try {
-    await wanCallDep(url, config, found.dep, found.index, sessionHash, {});
+    const out = await wanCallDep(url, config, found.dep, found.index, sessionHash, {});
+    addLog(`change_model 완료: ${JSON.stringify(out).slice(0, 150)}`, 'info');
   } catch(e) {
     addLog(`change_model 호출 실패, 계속 진행: ${e.message}`, 'info');
   }
