@@ -1590,6 +1590,30 @@ async function wanUploadFile(url, blob, sessionHash) {
   };
 }
 
+// output 트리 안에 있는 모든 영상 형태 노드를 전부 수집(첫 번째만 리턴하는 wanExtractVideo와 달리
+// 전수 조사). Wan2GP가 저장하는 실제 파일명은 "{시각}_seed{N}_{프롬프트}.mp4" 패턴이라, 그 패턴이
+// url/path/orig_name에 있는 노드를 진짜 결과로 우선 채택하기 위한 진단/폴백용.
+function wanCollectAllVideoLike(node, acc) {
+  acc = acc || [];
+  if (!node) return acc;
+  if (Array.isArray(node)) {
+    node.forEach(n => wanCollectAllVideoLike(n, acc));
+    return acc;
+  }
+  if (typeof node === 'object') {
+    const url = typeof node.url === 'string' ? node.url : null;
+    const path = typeof node.path === 'string' ? node.path : null;
+    const origName = typeof node.orig_name === 'string' ? node.orig_name : null;
+    const isVideoLike = (url && /\.(mp4|webm|mov)(\?|$)/i.test(url))
+      || (path && /\.(mp4|webm|mov)$/i.test(path));
+    if (isVideoLike) acc.push({ url, path, origName, size: node.size });
+    for (const key in node) {
+      wanCollectAllVideoLike(node[key], acc);
+    }
+  }
+  return acc;
+}
+
 function wanExtractVideo(node) {
   if (!node) return null;
   if (Array.isArray(node)) {
@@ -1777,7 +1801,14 @@ async function generateSceneVideo(idx) {
     const fin = wanFindDependency(config, 'finalize_generation');
     const output = await wanCallDep(url, config, fin.dep, fin.index, sessionHash, {});
 
-    const vidInfo = wanExtractVideo(output);
+    // 진단: output 안의 영상 형태 노드를 전부 나열 (진짜 결과 대신 미리보기/썸네일 조각을
+    // 잘못 집는 문제를 확인하기 위함 - 실제 서버 파일명 패턴 "_seed숫자_"가 있는 걸 우선 채택)
+    const allVideoLike = wanCollectAllVideoLike(output);
+    addLog(`output 안의 영상형 노드 전체(${allVideoLike.length}개): ${JSON.stringify(allVideoLike)}`, 'info');
+    const seedMatch = allVideoLike.find(v => /_seed\d+_/i.test(v.path || v.url || v.origName || ''));
+
+    let vidInfo = seedMatch || wanExtractVideo(output);
+    if (seedMatch) addLog(`실제 파일명 패턴(_seed숫자_)에 맞는 노드를 채택함: ${JSON.stringify(seedMatch)}`, 'ok');
     if (!vidInfo) throw new Error("생성 결과에서 영상을 찾지 못했습니다 (아직 이미지만 반환되는 모델/설정일 수 있습니다)");
 
     const blob = await wanFetchVideoBlob(url, vidInfo);
