@@ -1739,21 +1739,24 @@ async function generateSceneVideo(idx) {
     saveData[VIDEO_LENGTH_IDX] = targetFrames;
     addLog(`영상 길이(idx${VIDEO_LENGTH_IDX}, 24fps+1 공식)를 ${targetFrames}프레임(${videoLength}초 목표)으로 설정함`, 'ok');
 
-    // image_prompt_type("S")의 정확한 위치는 아직 못 찾음 - idx21은 실제로는 "Guidance Phases"
-    // (choices=[1,2,3])였음이 실패 로그로 확인됨(위치 정렬이 video_length 이후로는 어긋남,
-    // 아마 seed/batch_size 등 일부 파라미터가 실제로는 슬라이더+체크박스 등 2개 이상의 실제
-    // 컴포넌트로 쪼개져 있어서 단순 키 개수만큼 밀리지 않는 것으로 추정). image_prompt_type이
-    // 우리 라디오/드롭다운 전체 덤프(30개)에도 없었던 걸 보면 textbox 타입(숨김 필드)일 가능성이
-    // 높아 textbox 타입 전체를 진단 로그로 나열 - 다음 라운드에 정확한 위치를 찾기 위함.
-    const textboxCandidates = [];
+    // textbox 전체 덤프에서 idx37이 라벨 "LoRAs Multipliers"(=loras_multipliers)로 정확히
+    // 확인됐고, 작동하는 설정 JSON에서 image_prompt_type은 loras_multipliers 바로 다음 키임.
+    // 그 바로 다음 idx38(id=74)이 라벨/기본값 둘 다 빈 문자열인 숨김 textbox로 존재 - 위치와
+    // 성격(내부용 숨김 플래그) 모두 image_prompt_type과 일치하므로 이를 "S"(Start image)로 설정.
+    let imagePromptTypeIdx = -1;
     save.dep.inputs.forEach((id, i) => {
       const c = wanComponentById(config, id);
-      if (!c || c.type !== 'textbox') return;
-      const label = (c.props && c.props.label) ? c.props.label : '';
-      const val = c.props ? c.props.value : undefined;
-      textboxCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${JSON.stringify(val)})`);
+      if (c && c.type === 'textbox' && (c.props && c.props.label) === 'LoRAs Multipliers (1.0 by default) separated by Space chars or CR, lines that start with # are ignored') {
+        imagePromptTypeIdx = i + 1;
+      }
     });
-    addLog(`textbox 타입 전체(${textboxCandidates.length}개): ${textboxCandidates.join(' || ') || '없음'}`, 'info');
+    if (imagePromptTypeIdx !== -1) {
+      const c = wanComponentById(config, save.dep.inputs[imagePromptTypeIdx]);
+      addLog(`image_prompt_type 추정 idx${imagePromptTypeIdx}(id=${save.dep.inputs[imagePromptTypeIdx]}, type=${c ? c.type : '?'}, 기존값=${JSON.stringify(saveData[imagePromptTypeIdx])})를 "S"로 설정`, 'ok');
+      saveData[imagePromptTypeIdx] = 'S';
+    } else {
+      addLog(`LoRAs Multipliers 필드를 못 찾아 image_prompt_type 위치를 특정하지 못함`, 'warn');
+    }
 
     // 이미지/파일 타입 입력 슬롯 탐색.
     // 실제 로그 확인 결과, 진짜 I2V 시작 이미지 슬롯은 "Images as starting points for new Videos
