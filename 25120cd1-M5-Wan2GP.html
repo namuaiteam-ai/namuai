@@ -1723,6 +1723,28 @@ async function generateSceneVideo(idx) {
 
     const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
     const addData = wanBuildData(config, add.dep, {});
+
+    // process_prompt_and_add_tasks(state, current_gallery_tab, model_choice)의 두 번째 인자인
+    // current_gallery_tab이 이전 이미지 생성 호출에서 "이미지" 탭 값으로 캐시된 채 남아있으면,
+    // 영상 모델을 선택했어도 결과가 이미지로 나올 수 있음(방금 발생한 문제로 추정). 진단 후 가능하면
+    // "video/영상/비디오"가 포함된 선택지로 강제 전환.
+    const galleryTabId = add.dep.inputs.find(id => id !== WAN.stateCompId && id !== WAN.modelChoiceCompId);
+    if (galleryTabId) {
+      const gtIdx = add.dep.inputs.indexOf(galleryTabId);
+      const gtComp = wanComponentById(config, galleryTabId);
+      const gtLabel = gtComp && gtComp.props ? gtComp.props.label : '?';
+      const gtChoices = gtComp && gtComp.props && Array.isArray(gtComp.props.choices) ? gtComp.props.choices : null;
+      addLog(`current_gallery_tab 추정: idx${gtIdx} id=${galleryTabId} type=${gtComp ? gtComp.type : '?'} label=${gtLabel} 현재값=${JSON.stringify(addData[gtIdx])} choices=${JSON.stringify(gtChoices)}`, 'info');
+      if (gtChoices) {
+        const gtValues = gtChoices.map(ch => Array.isArray(ch) ? ch[1] : ch);
+        const videoChoice = gtValues.find(v => /video|영상|비디오/i.test(String(v)));
+        if (videoChoice !== undefined && addData[gtIdx] !== videoChoice) {
+          addLog(`current_gallery_tab을 "${videoChoice}"(으)로 강제 전환`, 'info');
+          addData[gtIdx] = videoChoice;
+        }
+      }
+    }
+
     const addOutput = await wanCall(url, add.index, addData, sessionHash);
     wanRecordOutputs(add.dep, addOutput);
 
