@@ -1006,9 +1006,9 @@ async function wanCallOnce(url, fnIndex, data, sessionHash) {
       const idx = WAN.queueWaiters.indexOf(waiter);
       if (idx !== -1) {
         WAN.queueWaiters.splice(idx, 1);
-        waiter.reject(new Error('Wan2GP 응답 타임아웃 (180초)'));
+        waiter.reject(new Error('Wan2GP 응답 타임아웃 (900초)'));
       }
-    }, 180000);
+    }, 900000);
 
     fetch(`${url}${WAN.prefix}/queue/join`, {
       method: 'POST',
