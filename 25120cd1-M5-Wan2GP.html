@@ -98,7 +98,10 @@
   .file-input { display: none; }
 
   .preview-flex { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
-  .preview-item { width: 48px; height: 48px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--border); }
+  .preview-item { width: 48px; height: 48px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--border); position: relative; margin-bottom: 22px; }
+  .preview-item .img-ctrl { position: absolute; bottom: -22px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; }
+  .preview-item .img-ctrl button { background: var(--surface-solid, #111); border: 1px solid var(--border); color: var(--text); font-size: 9px; padding: 1px 3px; border-radius: 4px; cursor: pointer; line-height: 1.4; }
+  .preview-item .img-ctrl button:hover { background: var(--accent2); border-color: var(--accent2); }
 
   .scene-card { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
   .scene-num { font-size: 11px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; min-width: 28px; }
@@ -597,17 +600,40 @@ async function handleZip(file) {
 }
 
 // ─── 파일 핸들러 ───
-function handleImages(files) {
-  files.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+function handleImages(files, skipSort) {
+  if (!skipSort) files.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
   state.images = files;
   document.getElementById("imgStatus").textContent = `${files.length}장 로드됨`;
   const p = document.getElementById("imgPreview"); p.innerHTML="";
-  files.forEach(f => {
+  files.forEach((f, i) => {
     const d = document.createElement("div"); d.className="preview-item";
     d.style.backgroundImage = `url(${URL.createObjectURL(f)})`;
+    const ctrl = document.createElement("div"); ctrl.className = "img-ctrl";
+    const btnL = document.createElement("button"); btnL.textContent = "◀"; btnL.title = "왼쪽으로 이동";
+    btnL.onclick = (e) => { e.stopPropagation(); moveImg(i, -1); };
+    const btnR = document.createElement("button"); btnR.textContent = "▶"; btnR.title = "오른쪽으로 이동";
+    btnR.onclick = (e) => { e.stopPropagation(); moveImg(i, 1); };
+    const btnD = document.createElement("button"); btnD.textContent = "×"; btnD.title = "삭제";
+    btnD.style.color = "var(--danger)";
+    btnD.onclick = (e) => { e.stopPropagation(); moveImg(i, 0); };
+    ctrl.append(btnL, btnR, btnD);
+    d.appendChild(ctrl);
     p.appendChild(d);
   });
   checkReady();
+}
+
+// 이미지 순서 변경(dir=-1/1) 또는 삭제(dir=0)
+function moveImg(idx, dir) {
+  if (dir === 0) {
+    state.images.splice(idx, 1);
+  } else {
+    const n = idx + dir;
+    if (n < 0 || n >= state.images.length) return;
+    const item = state.images.splice(idx, 1)[0];
+    state.images.splice(n, 0, item);
+  }
+  handleImages(state.images, true);
 }
 
 function handleAudio(file) {
