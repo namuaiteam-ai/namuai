@@ -571,13 +571,16 @@ async function handleZip(file) {
             state.imagePrompts = lines;
           }
         }
-        // script.txt 안의 "영상 프롬프트:" 접두어 작성 줄만 추출 (I2V용 모션 프롬프트)
-        const vidPromptLines = txt.split(/\r?\n/)
-          .filter(l => l.includes('영상 프롬프트:'))
-          .map(l => l.split('영상 프롬프트:')[1].trim());
+        // script.txt 안의 "비디오 프롬프트:" / "영상 프롬프트:" 접두어 작성 줄만 추출 (I2V용 모션 프롬프트)
+        const vidPromptPrefix = ['비디오 프롬프트:', '영상 프롬프트:'].find(p => txt.includes(p));
+        const vidPromptLines = vidPromptPrefix
+          ? txt.split(/\r?\n/)
+              .filter(l => l.includes(vidPromptPrefix))
+              .map(l => l.split(vidPromptPrefix)[1].trim())
+          : [];
         if (vidPromptLines.length > 0) {
           state.videoPrompts = vidPromptLines;
-          addLog(`script.txt에서 영상 프롬프트 ${vidPromptLines.length}개 추출 완료!`, 'ok');
+          addLog(`script.txt에서 영상(비디오) 프롬프트 ${vidPromptLines.length}개 추출 완료!`, 'ok');
         }
         // SRT가 없으면 나레이션 텍스트 추출
         if (!srtText) {
@@ -770,7 +773,7 @@ function renderSceneEditor() {
         </div>
         <div class="card-narr">${sc.text}</div>
         <textarea class="card-prompt" id="prompt-${i}" oninput="state.imagePrompts[${i}]=this.value">${promptVal}</textarea>
-        <textarea class="card-video-prompt" id="videoPrompt-${i}" placeholder="🎬 영상(I2V) 프롬프트 — 카메라/동작 움직임 묘사 (선택)" oninput="state.videoPrompts[${i}]=this.value">${videoPromptVal}</textarea>
+        <textarea class="card-video-prompt" id="videoPrompt-${i}" placeholder="🎬 비디오/영상(I2V) 프롬프트 — 카메라/동작 움직임 묘사 (선택)" oninput="state.videoPrompts[${i}]=this.value">${videoPromptVal}</textarea>
         <div class="card-actions">
           <button class="btn-regen" onclick="regenSceneImage(${i})">✨ 재생성</button>
           ${thumbSrc ? `<button class="btn-zoom" onclick="openSceneLightbox(${i})">🔍 크게 보기</button>` : ''}
