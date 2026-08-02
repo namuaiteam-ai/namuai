@@ -1199,14 +1199,20 @@ async function generateSceneImage(idx) {
     // 진단용: 숫자처럼 생겼는데 여전히 문자열인 값이 남아있는지 전부 찾아서 인덱스/라벨과 함께 로그.
     // (숫자 변환이 실제로 다 걸렸는지, 아니면 다른 원인인지 다음 라운드에 바로 알 수 있게)
     const suspects = [];
+    const numericTypeSuspects = [];
     saveData.forEach((v, i) => {
+      const compId = save.dep.inputs[i];
+      const comp = wanComponentById(config, compId);
       if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-        const compId = save.dep.inputs[i];
-        const comp = wanComponentById(config, compId);
         suspects.push(`idx${i}(id=${compId},type=${comp ? comp.type : '?'},label=${comp && comp.props ? comp.props.label : '?'})="${v}"`);
       }
+      // 타입이 number/slider인데 값이 실제 숫자가 아닌 경우(빈 문자열 등) 전부 표시
+      if (comp && (comp.type === 'number' || comp.type === 'slider') && typeof v !== 'number') {
+        numericTypeSuspects.push(`idx${i}(id=${compId},type=${comp.type},label=${comp.props ? comp.props.label : '?'})=${JSON.stringify(v)}`);
+      }
     });
-    addLog(`save_inputs 데이터 진단: 아직 문자열인 숫자값 ${suspects.length}개 - ${suspects.join('; ') || '없음'}`, 'info');
+    addLog(`save_inputs 데이터 진단: 문자열 숫자값 ${suspects.length}개 - ${suspects.join('; ') || '없음'}`, 'info');
+    addLog(`save_inputs 진단2: number/slider인데 숫자가 아닌 값 ${numericTypeSuspects.length}개 - ${numericTypeSuspects.join('; ') || '없음'}`, 'info');
     const saveOutput = await wanCall(url, save.index, saveData, sessionHash);
     wanRecordOutputs(save.dep, saveOutput);
 
