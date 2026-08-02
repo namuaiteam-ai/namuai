@@ -357,6 +357,25 @@
         </div>
       </div>
 
+      <!-- 배경음악 드롭존 -->
+      <div class="card">
+        <div class="card-title"><span>06</span> 배경음악 BGM (선택, 필수 아님)</div>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <div class="drop-zone" id="bgmZone" style="flex:1; min-height:80px; padding:16px;">
+            <input type="file" id="bgmInput" class="file-input" accept="audio/*">
+            <span style="font-size:20px;">🎵</span>
+            <span class="drop-text" style="font-size:12px;">배경음악 파일</span>
+            <div id="bgmStatus" class="drop-hint">넣지 않으면 나레이션만 사용됩니다</div>
+          </div>
+          <button id="bgmClearBtn" onclick="clearBgm()" style="display:none; background:var(--surface-light); border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:8px 10px; font-size:12px; cursor:pointer; flex-shrink:0;">제거</button>
+        </div>
+        <div class="setting-vbox" style="margin-top:12px;">
+          <label>배경음악 볼륨 (<span id="bgmVolVal">15</span>%)</label>
+          <input type="range" id="bgmVolume" min="0" max="60" step="1" value="15"
+            oninput="document.getElementById('bgmVolVal').textContent=this.value">
+        </div>
+      </div>
+
     </div>
 
     <!-- 우측 렌더러 -->
@@ -403,6 +422,7 @@ let state = {
   images: [],
   audio: null,
   thumbnail: null,
+  bgm: null,
   scenes: [],
   isRendering: false,
   blob916: null,
@@ -465,6 +485,7 @@ function initDragDrop() {
   setupZone("srtZone", UI.srtInput, files => handleSrtOrJson(files[0]));
   setupZone("zipZone", UI.zipInput, files => handleZip(files[0]));
   setupZone("thumbZone", document.getElementById("thumbInput"), files => handleThumbnail(files[0]));
+  setupZone("bgmZone", document.getElementById("bgmInput"), files => handleBgm(files[0]));
 }
 
 function handleThumbnail(file) {
@@ -476,6 +497,22 @@ function handleThumbnail(file) {
   img.style.display = 'block';
   document.getElementById('thumbStatus').textContent = '✓ ' + file.name;
   addLog(`썬네일 로드됨: ${file.name}`, 'ok');
+}
+
+function handleBgm(file) {
+  if (!file) return;
+  state.bgm = file;
+  document.getElementById('bgmStatus').textContent = '✓ ' + file.name;
+  document.getElementById('bgmClearBtn').style.display = 'inline-block';
+  addLog(`배경음악 로드됨: ${file.name}`, 'ok');
+}
+
+function clearBgm() {
+  state.bgm = null;
+  document.getElementById('bgmInput').value = '';
+  document.getElementById('bgmStatus').textContent = '넣지 않으면 나레이션만 사용됩니다';
+  document.getElementById('bgmClearBtn').style.display = 'none';
+  addLog('배경음악 제거됨', 'info');
 }
 
 // ─── ZIP 로딩 (JSZip) ───
@@ -1329,11 +1366,20 @@ async function handleRender() {
       });
     }
 
+    // 배경음악 디코딩 (선택)
+    let bgmBuffer = null;
+    if (state.bgm) {
+      addLog("배경음악 디코딩 중...", "info");
+      const bgmArrayBuffer = await state.bgm.arrayBuffer();
+      bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
+    }
+    const bgmVolume = parseInt(document.getElementById('bgmVolume')?.value || '15') / 100;
+
     addLog('▶ 9:16 세로 영상 렌더링...', 'info');
-    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, audioCtx, W: 1080, H: 1920, label: '916', playbackRate });
+    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1080, H: 1920, label: '916', playbackRate });
 
     addLog('▶ 16:9 가로 영상 렌더링...', 'info');
-    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, audioCtx, W: 1920, H: 1080, label: '169', playbackRate });
+    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1920, H: 1080, label: '169', playbackRate });
 
     UI.resVid.src = URL.createObjectURL(state.blob916);
     UI.resVid.style.display = 'block';
@@ -1349,25 +1395,39 @@ async function handleRender() {
   }
 }
 
-async function startProduction({ scenes, images, thumbImg, audioBuffer, audioCtx, W, H, label, playbackRate = 1.0 }) {
-  const allImages = thumbImg ? [thumbImg, ...images] : images;
+async function startProduction({ scenes, images, thumbImg, audioBuffer, bgmBuffer, bgmVolume = 0.15, audioCtx, W, H, label, playbackRate = 1.0 }) {
   return new Promise((resolve) => {
     UI.viz.width = W; UI.viz.height = H;
     const ctx = UI.viz.getContext('2d');
     const totalDuration = audioBuffer.duration / playbackRate;
+    const introDur = thumbImg ? 2.0 : 0; // 썬네일이 있으면 그 앞에 2초 인트로 커버로 사용
+    const renderDuration = introDur + totalDuration;
     const fps = 30;
-    const totalFrames = Math.ceil(totalDuration * fps);
+    const totalFrames = Math.ceil(renderDuration * fps);
     const transition = document.getElementById('transitionType')?.value || 'cut';
     const bitrate = parseInt(document.getElementById('quality')?.value || '8000000');
 
     let chunks = [];
     const stream = UI.viz.captureStream(fps);
     const dest = audioCtx.createMediaStreamDestination();
+
+    // 나레이션: 인트로 시간만큼 뒤로 밀어서 시작
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.playbackRate.value = playbackRate;
     source.connect(dest);
-    
+
+    // 배경음악 (선택): 영상 시작과 동시에, 부족하면 반복 재생, 볼륨은 나레이션보다 낮게
+    let bgmSource = null;
+    if (bgmBuffer) {
+      bgmSource = audioCtx.createBufferSource();
+      bgmSource.buffer = bgmBuffer;
+      bgmSource.loop = true;
+      const bgmGain = audioCtx.createGain();
+      bgmGain.gain.value = bgmVolume;
+      bgmSource.connect(bgmGain).connect(dest);
+    }
+
     const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
     const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
@@ -1378,12 +1438,19 @@ async function startProduction({ scenes, images, thumbImg, audioBuffer, audioCtx
       resolve();
     };
 
+    const startAt = audioCtx.currentTime;
     recorder.start();
-    source.start();
+    source.start(startAt + introDur);
+    if (bgmSource) bgmSource.start(startAt);
 
     let frame = 0;
     function render() {
-      if (frame >= totalFrames) { recorder.stop(); source.stop(); return; }
+      if (frame >= totalFrames) {
+        recorder.stop(); source.stop();
+        if (bgmSource) bgmSource.stop();
+        return;
+      }
+      const elapsed = frame / fps;
       const progress = frame / totalFrames;
       UI.progThumb.style.width = (progress * 100) + '%';
       UI.progPct.textContent = Math.floor(progress * 100) + '%';
@@ -1391,71 +1458,67 @@ async function startProduction({ scenes, images, thumbImg, audioBuffer, audioCtx
 
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
 
-      // 이미지 인덱스 + 씬 내부 진행도
-      const imgIdx = Math.min(Math.floor(progress * allImages.length), allImages.length - 1);
-      const img = allImages[imgIdx];
-      const imgDur = totalDuration / allImages.length;
-      const imgLocalProgress = Math.min(((progress * totalDuration) - imgIdx * imgDur) / imgDur, 1);
+      if (elapsed < introDur) {
+        // 인트로: 썬네일을 커버 이미지로 짧게 보여줌 (Ken Burns 줌인)
+        const introProgress = elapsed / introDur;
+        const zoom = 1.0 + introProgress * 0.08;
+        const dw = W * zoom, dh = H * zoom;
+        ctx.drawImage(thumbImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      } else {
+        const contentElapsed = elapsed - introDur;
+        // 이미지 인덱스 + 씬 내부 진행도
+        const imgDur = totalDuration / images.length;
+        const imgIdx = Math.min(Math.floor(contentElapsed / imgDur), images.length - 1);
+        const img = images[imgIdx];
+        const imgLocalProgress = Math.min((contentElapsed - imgIdx * imgDur) / imgDur, 1);
 
-      if (img) {
-        if (transition === 'kenburns') {
-          // Ken Burns: 이미지마다 방향 교대로 팬/줌
-          const zoom = 1.0 + imgLocalProgress * 0.08;
-          const dw = W * zoom, dh = H * zoom;
-          const kbType = imgIdx % 3;
-          let ox = 0, oy = 0;
-          if (kbType === 0) { ox = (W - dw) * imgLocalProgress; oy = (H - dh) * imgLocalProgress; }
-          else if (kbType === 1) { ox = (W - dw) * (1 - imgLocalProgress); oy = (H - dh) * imgLocalProgress; }
-          else { ox = (W - dw) / 2; oy = (H - dh) * imgLocalProgress; }
-          ctx.drawImage(img, ox, oy, dw, dh);
-        } else if (transition === 'fade') {
-          ctx.drawImage(img, 0, 0, W, H);
-          if (imgLocalProgress > 0.8 && imgIdx + 1 < allImages.length) {
-            const alpha = (imgLocalProgress - 0.8) / 0.2;
-            ctx.globalAlpha = alpha;
-            ctx.drawImage(allImages[imgIdx + 1], 0, 0, W, H);
-            ctx.globalAlpha = 1.0;
+        if (img) {
+          if (transition === 'kenburns') {
+            // Ken Burns: 이미지마다 방향 교대로 팬/줌
+            const zoom = 1.0 + imgLocalProgress * 0.08;
+            const dw = W * zoom, dh = H * zoom;
+            const kbType = imgIdx % 3;
+            let ox = 0, oy = 0;
+            if (kbType === 0) { ox = (W - dw) * imgLocalProgress; oy = (H - dh) * imgLocalProgress; }
+            else if (kbType === 1) { ox = (W - dw) * (1 - imgLocalProgress); oy = (H - dh) * imgLocalProgress; }
+            else { ox = (W - dw) / 2; oy = (H - dh) * imgLocalProgress; }
+            ctx.drawImage(img, ox, oy, dw, dh);
+          } else if (transition === 'fade') {
+            ctx.drawImage(img, 0, 0, W, H);
+            if (imgLocalProgress > 0.8 && imgIdx + 1 < images.length) {
+              const alpha = (imgLocalProgress - 0.8) / 0.2;
+              ctx.globalAlpha = alpha;
+              ctx.drawImage(images[imgIdx + 1], 0, 0, W, H);
+              ctx.globalAlpha = 1.0;
+            }
+          } else {
+            ctx.drawImage(img, 0, 0, W, H);
           }
-        } else {
-          ctx.drawImage(img, 0, 0, W, H);
         }
-      }
 
-      // 자막: SRT 실제 시간 기반
-      const currentTime = frame / fps;
-      let currentScene = null;
-      for (let i = 0; i < scenes.length; i++) {
-        if (scenes[i].start !== null && currentTime >= scenes[i].start && currentTime <= scenes[i].end) {
-          currentScene = scenes[i]; break;
-        } else if (scenes[i].start === null) {
-          const sDur = totalDuration / Math.max(1, scenes.length);
-          if (currentTime >= i*sDur && currentTime < (i+1)*sDur) { currentScene = scenes[i]; break; }
+        // 자막: SRT 실제 시간 기반 (나레이션 기준 시간이므로 인트로 이후 경과시간 사용)
+        const currentTime = contentElapsed;
+        let currentScene = null, sceneProgress = 0;
+        for (let i = 0; i < scenes.length; i++) {
+          if (scenes[i].start !== null) {
+            if (currentTime >= scenes[i].start && currentTime <= scenes[i].end) {
+              currentScene = scenes[i];
+              sceneProgress = (currentTime - scenes[i].start) / Math.max(0.01, scenes[i].end - scenes[i].start);
+              break;
+            }
+          } else {
+            const sDur = totalDuration / Math.max(1, scenes.length);
+            if (currentTime >= i*sDur && currentTime < (i+1)*sDur) {
+              currentScene = scenes[i];
+              sceneProgress = (currentTime - i*sDur) / sDur;
+              break;
+            }
+          }
         }
-      }
 
-      if (currentScene) {
-        const subPos = document.getElementById('subPos')?.value || 'bottom';
-        const subY = subPos === 'top' ? H*0.12 : subPos === 'middle' ? H*0.5 : H*0.84;
-        const fontSize = W > 1000 ? 68 : 48;
-        
-        ctx.font = `bold ${fontSize}px "Outfit", "Noto Sans KR", sans-serif`;
-        const tw = ctx.measureText(currentScene.text).width;
-        const pad = 28;
-        // 자막 배경 라운드 박스
-        ctx.fillStyle = 'rgba(0,0,0,0.58)';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(W/2 - tw/2 - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38, 14);
-        } else {
-          ctx.rect(W/2 - tw/2 - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38);
+        if (currentScene) {
+          drawAnimatedSubtitle(ctx, currentScene.text, sceneProgress, W, H);
         }
-        ctx.fill();
-
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 12;
-        ctx.strokeText(currentScene.text, W/2, subY);
-        ctx.fillStyle = '#fff';
-        ctx.fillText(currentScene.text, W/2, subY);
       }
 
       frame++;
@@ -1463,6 +1526,49 @@ async function startProduction({ scenes, images, thumbImg, audioBuffer, audioCtx
     }
     render();
   });
+}
+
+// 자막을 진행도에 따라 왼쪽에서 오른쪽으로 하이라이트(움직이는) 효과로 그림
+function drawAnimatedSubtitle(ctx, text, progress, W, H) {
+  const subPos = document.getElementById('subPos')?.value || 'bottom';
+  const subY = subPos === 'top' ? H*0.12 : subPos === 'middle' ? H*0.5 : H*0.84;
+  const fontSize = W > 1000 ? 68 : 48;
+
+  ctx.font = `bold ${fontSize}px "Outfit", "Noto Sans KR", sans-serif`;
+  const tw = ctx.measureText(text).width;
+  const pad = 28;
+  const startX = W/2 - tw/2;
+
+  // 자막 배경 라운드 박스
+  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(startX - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38, 14);
+  } else {
+    ctx.rect(startX - pad, subY - fontSize*0.68, tw + pad*2, fontSize*1.38);
+  }
+  ctx.fill();
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  // 기본 텍스트(흰색 + 검은 외곽선)
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 12;
+  ctx.strokeText(text, W/2, subY);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, W/2, subY);
+
+  // 진행도만큼 왼쪽부터 포인트 컬러로 덧칠해 "움직이는" 느낌을 줌 (가라오케 스타일)
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+  if (clampedProgress > 0) {
+    const highlightWidth = tw * clampedProgress;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(startX, subY - fontSize*0.68, highlightWidth, fontSize*1.38);
+    ctx.clip();
+    ctx.fillStyle = '#ff6b35';
+    ctx.fillText(text, W/2, subY);
+    ctx.restore();
+  }
 }
 
 function downloadVideo(ratio) {
