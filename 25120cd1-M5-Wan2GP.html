@@ -506,9 +506,18 @@ function initDragDrop() {
   };
 
   setupZone("imgZone", UI.imgInput, files => {
-    const newImgs = Array.from(files).filter(f=>f.type.startsWith("image/"));
+    const all = Array.from(files);
+    // f.type가 비어있는 경우가 있어(예: 일부 브라우저의 HEIC/WEBP 등) MIME 타입만으로 거르면
+    // 유효한 이미지가 조용히 누락될 수 있으므로 확장자도 함께 확인
+    const isImg = f => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif)$/i.test(f.name);
+    const newImgs = all.filter(isImg);
+    const skipped = all.filter(f => !isImg(f));
+    if (skipped.length > 0) {
+      addLog(`이미지로 인식되지 않아 제외된 파일: ${skipped.map(f=>f.name).join(', ')}`, 'warn');
+    }
     newImgs.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
-    handleImages(newImgs);
+    // 기존에 로드된 이미지 뒤에 이어 붙임 (다시 선택해도 덮어쓰지 않고 추가됨)
+    handleImages([...state.images, ...newImgs], true);
   });
   setupZone("audioZone", UI.audioInput, files => handleAudio(files[0]));
   setupZone("srtZone", UI.srtInput, files => handleSrtOrJson(files[0]));
