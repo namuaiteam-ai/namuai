@@ -1710,6 +1710,15 @@ async function generateSceneVideo(idx) {
 
     addLog(`S${idx+1} 소스 이미지 업로드 중...`, 'info');
     const uploadedImage = await wanUploadFile(url, imgBlob, sessionHash);
+    addLog(`업로드 결과: ${JSON.stringify(uploadedImage)}`, 'info');
+    // 업로드된 파일이 서버에서 실제로 읽히는지 자체 확인 (경로/URL이 형식은 맞아도 실제로는
+    // 존재하지 않는 파일을 가리켜서 서버가 조용히 무시하는 문제인지 확인하기 위함)
+    try {
+      const verifyRes = await fetch(uploadedImage.url, { method: 'HEAD' });
+      addLog(`업로드 파일 자체 확인: HTTP ${verifyRes.status} ${verifyRes.ok ? '(정상 접근 가능)' : '(문제 있음!)'}`, verifyRes.ok ? 'ok' : 'err');
+    } catch(e) {
+      addLog(`업로드 파일 자체 확인 실패: ${e.message}`, 'err');
+    }
 
     const save = wanFindDependency(config, 'save_inputs');
     const saveData = wanBuildData(config, save.dep, {
