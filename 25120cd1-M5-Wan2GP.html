@@ -1633,6 +1633,24 @@ async function wanFetchVideoBlob(baseUrl, vidInfo) {
   throw lastErr || new Error('영상 다운로드 실패');
 }
 
+// 영상 생성은 오래 걸려서(수십초~분 단위), 이전 시도(특히 실패했던 시도나 이미지 생성 호출)의
+// 세션/큐 연결이 남아있으면 서버 응답이 뒤섞여 "Caught handled exception, but response already
+// started" 같은 서버 에러와 함께 엉뚱한(잘림/깨진) 결과를 받아오는 문제가 확인됨.
+// 영상 생성 시작 전 항상 완전히 새 세션으로 리셋해서 이 문제를 피함.
+function wanResetSession() {
+  if (WAN.queueStream) {
+    try { WAN.queueStream.close(); } catch(e) {}
+  }
+  WAN.queueStream = null;
+  WAN.queueWaiters.forEach(w => w.reject(new Error('세션이 재설정되어 취소됨')));
+  WAN.queueWaiters = [];
+  WAN.sessionHash = 'nf' + Math.random().toString(36).slice(2, 12);
+  WAN.componentValues = {};
+  WAN.stateCompId = null;
+  WAN.modelChoiceCompId = null;
+  WAN.prefix = null;
+}
+
 // 이미지 생성과 같은 process_prompt_and_add_tasks 파이프라인을 재사용하되,
 // 1) 소스 이미지를 먼저 업로드해서 I2V "Start Image" 입력 슬롯에 주입하고
 // 2) 프롬프트는 imagePrompts 대신 videoPrompts를 사용하고
@@ -1657,7 +1675,8 @@ async function generateSceneVideo(idx) {
   addLog(`S${idx+1} 씬 영상 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution}, ${videoLength}초)`, 'info');
 
   try {
-    const config = await wanGetConfig(url);
+    wanResetSession(); // 이전 시도의 세션/큐가 이번 결과와 뒤섞이지 않도록 항상 새로 시작
+    const config = await wanGetConfig(url, true);
     const sessionHash = wanSessionHash();
     await wanTriggerLoadEvents(url, config, sessionHash);
     if (!WAN.stateCompId) wanPopulateModelDropdown(config);
