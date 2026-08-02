@@ -1794,19 +1794,27 @@ async function generateSceneVideo(idx) {
     // 우리가 주입한 gallery 이미지를 실제로 쓰도록 별도 설정돼야 할 가능성이 있어 전부 나열.
     const modeDropdownCandidates = [];
     const strengthSlotCandidates = [];
+    const allRadioDropdowns = [];
     save.dep.inputs.forEach((id, i) => {
       const c = wanComponentById(config, id);
       if (!c) return;
       const label = (c.props && c.props.label) ? c.props.label : '';
-      if ((c.type === 'dropdown' || c.type === 'radio') && /control|video process|guide|inject|source|mode/i.test(label)) {
+      if (c.type === 'dropdown' || c.type === 'radio') {
         const choices = c.props && Array.isArray(c.props.choices) ? c.props.choices.map(ch => Array.isArray(ch) ? ch[1] : ch) : null;
-        modeDropdownCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${JSON.stringify(c.props ? c.props.value : '?')},choices=${JSON.stringify(choices)})`);
+        allRadioDropdowns.push(`idx${i}(id=${id},type=${c.type},label="${label}",현재값=${JSON.stringify(c.props ? c.props.value : '?')},choices=${JSON.stringify(choices)})`);
+        if (/control|video process|guide|inject|source|mode/i.test(label)) {
+          modeDropdownCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${JSON.stringify(c.props ? c.props.value : '?')},choices=${JSON.stringify(choices)})`);
+        }
       }
       if (c.type === 'slider' && /strength|denois|weight/i.test(label)) {
         strengthSlotCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${c.props ? c.props.value : '?'})`);
       }
     });
-    addLog(`모드/제어 드롭다운 후보: ${modeDropdownCandidates.join('; ') || '없음'}`, 'info');
+    addLog(`모드/제어 드롭다운 후보(키워드 매칭): ${modeDropdownCandidates.join('; ') || '없음'}`, 'info');
+    // 첫 화면의 "텍스트 프롬프트 / 이미지부터 시작하세요 / 동영상 계속 보기 / 이전 영상 계속 보기"
+    // 탭이 라벨에 저 키워드들이 없을 수 있어(내부 라벨이 다른 문자열일 가능성), radio/dropdown
+    // 타입 전부를 예외 없이 나열 - 이 중에 그 4가지 모드에 해당하는 게 있는지 직접 확인하기 위함
+    addLog(`radio/dropdown 타입 전체(${allRadioDropdowns.length}개): ${allRadioDropdowns.join(' || ') || '없음'}`, 'info');
     addLog(`강도(strength) 관련 슬롯 후보: ${strengthSlotCandidates.join('; ') || '없음'}`, 'info');
 
     if (imageSlotIdx === -1) {
@@ -1869,7 +1877,18 @@ async function generateSceneVideo(idx) {
     // 잘못 집는 문제를 확인하기 위함 - 실제 서버 파일명 패턴 "_seed숫자_"가 있는 걸 우선 채택)
     const allVideoLike = wanCollectAllVideoLike(output);
     addLog(`output 안의 영상형 노드 전체(${allVideoLike.length}개): ${JSON.stringify(allVideoLike)}`, 'info');
-    const seedMatch = allVideoLike.find(v => /_seed\d+_/i.test(v.path || v.url || v.origName || ''));
+    // LTX2의 "Two Phases" 생성처럼 phase 1(중간)/phase 2(최종) 결과가 둘 다 저장되는 경우가
+    // 있어(같은 시드, 다른 시각), 첫 매치가 아니라 파일명의 타임스탬프가 가장 늦은(최종) 걸 채택.
+    // 타임스탬프 형식 "YYYY-MM-DD-HHhMMmSSs"는 문자열 그대로 사전식 비교해도 시간순 정렬됨.
+    const seedMatches = allVideoLike.filter(v => /_seed\d+_/i.test(v.path || v.url || v.origName || ''));
+    const getTimestamp = v => {
+      const m = (v.path || v.url || v.origName || '').match(/(\d{4}-\d{2}-\d{2}-\d{2}h\d{2}m\d{2}s)/);
+      return m ? m[1] : '';
+    };
+    const seedMatch = seedMatches.length > 0
+      ? seedMatches.reduce((latest, cur) => getTimestamp(cur) > getTimestamp(latest) ? cur : latest)
+      : null;
+    if (seedMatches.length > 1) addLog(`시드 패턴 일치 파일 ${seedMatches.length}개 발견(2단계 생성 등) - 가장 늦은 시각의 것을 최종 결과로 채택`, 'info');
 
     let vidInfo = seedMatch || wanExtractVideo(output);
     if (seedMatch) addLog(`실제 파일명 패턴(_seed숫자_)에 맞는 노드를 채택함: ${JSON.stringify(seedMatch)}`, 'ok');
