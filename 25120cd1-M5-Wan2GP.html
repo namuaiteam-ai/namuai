@@ -403,6 +403,27 @@
         </div>
       </div>
 
+      <!-- 영상 클립 조립 (LTX2 I2V로 생성된 영상들을 자유롭게 추가/삭제/순서변경 후 이어붙이기) -->
+      <div class="card">
+        <div class="card-title"><span>07</span> 영상 클립 조립 (LTX2 영상 → 최종 영상)</div>
+        <div style="font-size:10px; color:var(--muted); line-height:1.5; margin-bottom:10px;">
+          씬별로 "🎬 영상 생성 (I2V)"를 누르면 여기 자동으로 추가됩니다. 직접 영상 파일을 끌어다 놓아도 되고,
+          아래 미리보기에서 ◀ ▶ 로 순서를 바꾸거나 ×로 뺄 수 있습니다. 순서를 정한 뒤 "최종 영상 만들기"를 누르면
+          이 클립들을(각자의 오디오 포함) 순서대로 이어붙인 영상 1개를 만듭니다.
+        </div>
+        <div class="drop-zone" id="videoClipZone" style="min-height:80px; padding:16px;">
+          <input type="file" id="videoClipInput" class="file-input" accept="video/*" multiple>
+          <span style="font-size:20px;">🎬</span>
+          <span class="drop-text" style="font-size:12px;">영상 클립 추가</span>
+          <div id="videoClipStatus" class="drop-hint">0개</div>
+        </div>
+        <div class="preview-flex" id="videoClipPreview" style="margin-top:12px;"></div>
+        <button class="sd-btn" style="width:100%; margin-top:12px;" onclick="renderFinalVideoClips()">▶ 최종 영상 만들기 (클립 이어붙이기)</button>
+        <div id="finalClipsProgress" style="font-size:11px; color:var(--muted); margin-top:8px; display:none;"></div>
+        <video id="finalClipsVideo" controls style="display:none; width:100%; margin-top:12px; border-radius:8px;"></video>
+        <a id="finalClipsDownload" download="final_clips.webm" style="display:none; margin-top:8px; text-align:center; background:var(--success); color:#fff; border-radius:8px; padding:8px; font-size:12px; font-weight:700; text-decoration:none;">⬇ 최종 영상 다운로드</a>
+      </div>
+
     </div>
 
     <!-- 우측 렌더러 -->
@@ -448,6 +469,7 @@
 let state = {
   images: [],
   videos: [],
+  videoClips: [],
   audio: null,
   thumbnail: null,
   bgm: null,
@@ -524,6 +546,16 @@ function initDragDrop() {
   setupZone("zipZone", UI.zipInput, files => handleZip(files[0]));
   setupZone("thumbZone", document.getElementById("thumbInput"), files => handleThumbnail(files[0]));
   setupZone("bgmZone", document.getElementById("bgmInput"), files => handleBgm(files[0]));
+  setupZone("videoClipZone", document.getElementById("videoClipInput"), files => {
+    const all = Array.from(files);
+    const isVid = f => f.type.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(f.name);
+    const newVids = all.filter(isVid);
+    const skipped = all.filter(f => !isVid(f));
+    if (skipped.length > 0) {
+      addLog(`영상으로 인식되지 않아 제외된 파일: ${skipped.map(f=>f.name).join(', ')}`, 'warn');
+    }
+    handleVideoClips([...state.videoClips, ...newVids]);
+  });
 }
 
 function handleThumbnail(file) {
@@ -682,6 +714,134 @@ function moveImg(idx, dir) {
     state.images.splice(n, 0, item);
   }
   handleImages(state.images, true);
+}
+
+// 최종 영상 조립용 영상 클립 묶음 (씬 순서와 무관하게 자유롭게 추가/삭제/순서변경 가능)
+function handleVideoClips(files) {
+  state.videoClips = files;
+  document.getElementById("videoClipStatus").textContent = `${files.length}개`;
+  const p = document.getElementById("videoClipPreview"); p.innerHTML = "";
+  files.forEach((f, i) => {
+    const d = document.createElement("div"); d.className = "preview-item";
+    const vid = document.createElement("video");
+    vid.src = URL.createObjectURL(f);
+    vid.muted = true; vid.loop = true; vid.playsInline = true;
+    vid.style.cssText = "width:100%; height:100%; object-fit:cover; border-radius:8px; pointer-events:none;";
+    vid.oncanplay = () => vid.play().catch(()=>{});
+    d.appendChild(vid);
+    const ctrl = document.createElement("div"); ctrl.className = "img-ctrl";
+    const btnL = document.createElement("button"); btnL.textContent = "◀"; btnL.title = "왼쪽으로 이동";
+    btnL.onclick = (e) => { e.stopPropagation(); moveVideoClip(i, -1); };
+    const btnR = document.createElement("button"); btnR.textContent = "▶"; btnR.title = "오른쪽으로 이동";
+    btnR.onclick = (e) => { e.stopPropagation(); moveVideoClip(i, 1); };
+    const btnD = document.createElement("button"); btnD.textContent = "×"; btnD.title = "삭제";
+    btnD.style.color = "var(--danger)";
+    btnD.onclick = (e) => { e.stopPropagation(); moveVideoClip(i, 0); };
+    ctrl.append(btnL, btnR, btnD);
+    d.appendChild(ctrl);
+    p.appendChild(d);
+  });
+}
+
+// 영상 클립 순서 변경(dir=-1/1) 또는 삭제(dir=0)
+function moveVideoClip(idx, dir) {
+  if (dir === 0) {
+    state.videoClips.splice(idx, 1);
+  } else {
+    const n = idx + dir;
+    if (n < 0 || n >= state.videoClips.length) return;
+    const item = state.videoClips.splice(idx, 1)[0];
+    state.videoClips.splice(n, 0, item);
+  }
+  handleVideoClips(state.videoClips);
+}
+
+// ─── 영상 클립 이어붙이기 (각 클립의 오디오 포함, 순서대로 캔버스에 재생하며 재녹화) ───
+// 클립 하나를 캔버스에 그리면서 오디오를 dest로 라우팅하고, 재생이 끝날 때까지 대기.
+function playClipIntoCanvas(blob, canvas, ctx, W, H, audioCtx, dest) {
+  return new Promise((resolve, reject) => {
+    const videoEl = document.createElement('video');
+    videoEl.src = URL.createObjectURL(blob);
+    videoEl.muted = false;
+    videoEl.playsInline = true;
+    let rafId = null;
+
+    const draw = () => {
+      if (videoEl.paused || videoEl.ended) return;
+      const scale = Math.max(W / videoEl.videoWidth, H / videoEl.videoHeight);
+      const dw = videoEl.videoWidth * scale, dh = videoEl.videoHeight * scale;
+      const dx = (W - dw) / 2, dy = (H - dh) / 2;
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(videoEl, dx, dy, dw, dh);
+      rafId = requestAnimationFrame(draw);
+    };
+
+    videoEl.onloadedmetadata = () => {
+      try {
+        const sourceNode = audioCtx.createMediaElementSource(videoEl);
+        sourceNode.connect(dest);
+      } catch(e) {
+        // 오디오가 없는 클립이거나 이미 연결된 경우 등 - 영상만 이어붙임
+      }
+      videoEl.play().then(() => { rafId = requestAnimationFrame(draw); }).catch(reject);
+    };
+    videoEl.onended = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      resolve();
+    };
+    videoEl.onerror = () => { reject(new Error('클립 재생 실패: ' + (blob.name || ''))); };
+  });
+}
+
+async function renderFinalVideoClips() {
+  if (!state.videoClips || state.videoClips.length === 0) {
+    alert('영상 클립을 먼저 추가해주세요 (씬에서 "영상 생성"을 하거나 직접 파일을 넣어주세요).');
+    return;
+  }
+  const progEl = document.getElementById('finalClipsProgress');
+  progEl.style.display = 'block';
+  addLog(`영상 클립 ${state.videoClips.length}개 이어붙이기 시작...`, 'info');
+
+  const W = 1080, H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const dest = audioCtx.createMediaStreamDestination();
+  const stream = canvas.captureStream(30);
+  const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+  const bitrate = parseInt(document.getElementById('quality')?.value || '8000000');
+  const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
+  let chunks = [];
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  const stopped = new Promise(resolve => { recorder.onstop = resolve; });
+
+  try {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    recorder.start();
+    for (let i = 0; i < state.videoClips.length; i++) {
+      progEl.textContent = `클립 ${i + 1}/${state.videoClips.length} 재생 중...`;
+      addLog(`클립 ${i + 1}/${state.videoClips.length} 재생 중...`, 'info');
+      await playClipIntoCanvas(state.videoClips[i], canvas, ctx, W, H, audioCtx, dest);
+    }
+  } finally {
+    recorder.stop();
+    await stopped;
+    await audioCtx.close();
+  }
+
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  const url = URL.createObjectURL(blob);
+  const vidEl = document.getElementById('finalClipsVideo');
+  vidEl.src = url;
+  vidEl.style.display = 'block';
+  const dlLink = document.getElementById('finalClipsDownload');
+  dlLink.href = url;
+  dlLink.style.display = 'inline-block';
+  progEl.style.display = 'none';
+  addLog('✅ 영상 클립 조립 완료!', 'ok');
 }
 
 function handleAudio(file) {
@@ -1585,7 +1745,10 @@ async function generateSceneVideo(idx) {
     if (!state.videos) state.videos = [];
     state.videos[idx] = blob;
     renderSceneEditor();
-    addLog(`S${idx+1} 영상 생성 완료!`, 'ok');
+    // 최종 영상 조립용 클립 묶음에도 자동으로 추가 (자유롭게 순서변경/삭제 가능)
+    if (!state.videoClips) state.videoClips = [];
+    handleVideoClips([...state.videoClips, blob]);
+    addLog(`S${idx+1} 영상 생성 완료! (영상 클립 조립 묶음에도 추가됨)`, 'ok');
   } catch(e) {
     addLog(`영상 생성 실패: ${e.message}`, 'err');
   }
