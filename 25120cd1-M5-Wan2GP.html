@@ -263,6 +263,23 @@
           <div style="font-size:10px; color:var(--muted); line-height:1.5;">
             ※ 모델 목록은 "연결 확인"을 누르면 Wan2GP에서 실제 등록된 모델 목록을 그대로 가져와 채워집니다. 이미 다운로드된(사용 중인) 모델을 선택하세요 — 새 모델은 자동으로 다운로드를 시도합니다.
           </div>
+          <div style="border-top:1px dashed var(--border); margin:6px 0;"></div>
+          <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">🎬 영상 모델</span>
+            <input type="text" class="sd-input" id="sd-video-model-custom" value="" placeholder="예: ltxv_13b (I2V 지원 LTX2 모델 ID — Wan2GP 설정에서 확인)">
+          </div>
+          <div class="sd-row">
+            <span style="font-size:12px; color:var(--muted); width: 70px;">영상 길이</span>
+            <select class="sd-input" id="sd-video-length" style="cursor:pointer;">
+              <option value="3">3초</option>
+              <option value="5" selected>5초</option>
+              <option value="8">8초</option>
+              <option value="10">10초</option>
+            </select>
+          </div>
+          <div style="font-size:10px; color:var(--muted); line-height:1.5;">
+            ※ 씬 카드의 "🎬 영상 생성" 버튼은 해당 씬에 이미지가 있어야 동작합니다(Wan2GP로 생성했든, 외부 이미지를 직접 넣었든 상관없음). 아래 "비디오 프롬프트" 칸의 내용이 모션 프롬프트로 사용됩니다. 이 기능은 아직 실험 단계라 첫 시도에서 오류가 나면 로그를 확인해 알려주세요.
+          </div>
         </div>
       </div>
 
@@ -430,6 +447,7 @@
 <script>
 let state = {
   images: [],
+  videos: [],
   audio: null,
   thumbnail: null,
   bgm: null,
@@ -755,22 +773,29 @@ function renderSceneEditor() {
 
   state.scenes.forEach((sc, i) => {
     const imgBlob = state.images[i];
+    const vidBlob = state.videos && state.videos[i];
     const promptVal = (state.imagePrompts && state.imagePrompts[i]) ? state.imagePrompts[i] : sc.text;
     const videoPromptVal = (state.videoPrompts && state.videoPrompts[i]) ? state.videoPrompts[i] : '';
     const thumbSrc = imgBlob ? URL.createObjectURL(imgBlob) : null;
+    const vidSrc = vidBlob ? URL.createObjectURL(vidBlob) : null;
 
     const card = document.createElement('div');
     card.className = 'scene-img-card';
     card.id = `scene-card-${i}`;
 
     card.innerHTML = `
-      ${thumbSrc
-        ? `<img class="card-thumb" src="${thumbSrc}" alt="S${i+1}" onclick="openSceneLightbox(${i})" title="클릭하면 크게 봅니다">`
-        : `<div class="card-thumb-empty">🎬</div>`}
+      ${vidSrc
+        ? `<video class="card-thumb" src="${vidSrc}" muted loop autoplay playsinline title="생성된 영상 미리보기"></video>`
+        : thumbSrc
+          ? `<img class="card-thumb" src="${thumbSrc}" alt="S${i+1}" onclick="openSceneLightbox(${i})" title="클릭하면 크게 봅니다">`
+          : `<div class="card-thumb-empty">🎬</div>`}
       <div class="card-body">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span class="card-scene-num">S${String(i+1).padStart(2,'0')}</span>
-          ${imgBlob ? '<span style="font-size:9px; color:var(--success);">✅ 생성됨</span>' : '<span style="font-size:9px; color:var(--muted);">⬜ 없음</span>'}
+          <span style="display:flex; gap:6px;">
+            ${imgBlob ? '<span style="font-size:9px; color:var(--success);">✅ 이미지</span>' : '<span style="font-size:9px; color:var(--muted);">⬜ 이미지</span>'}
+            ${vidBlob ? '<span style="font-size:9px; color:var(--success);">✅ 영상</span>' : '<span style="font-size:9px; color:var(--muted);">⬜ 영상</span>'}
+          </span>
         </div>
         <div class="card-narr">${sc.text}</div>
         <textarea class="card-prompt" id="prompt-${i}" oninput="state.imagePrompts[${i}]=this.value">${promptVal}</textarea>
@@ -778,6 +803,10 @@ function renderSceneEditor() {
         <div class="card-actions">
           <button class="btn-regen" onclick="regenSceneImage(${i})">✨ 재생성</button>
           ${thumbSrc ? `<button class="btn-zoom" onclick="openSceneLightbox(${i})">🔍 크게 보기</button>` : ''}
+        </div>
+        <div class="card-actions">
+          <button class="btn-regen" ${imgBlob ? '' : 'disabled title="먼저 이미지가 필요합니다"'} onclick="generateSceneVideo(${i})">🎬 영상 생성 (I2V)</button>
+          ${vidSrc ? `<a class="btn-zoom" href="${vidSrc}" download="scene_${String(i+1).padStart(2,'0')}.mp4">⬇ 영상 저장</a>` : ''}
         </div>
       </div>
     `;
@@ -1371,6 +1400,186 @@ async function generateAllMissingImages(forceAll = false) {
     await generateSceneImage(i);
   }
   if(forceAll) addLog("레퍼런스 기반 씬 전체 이미지 생성이 완료되었습니다!", "ok");
+}
+
+// ─── 영상(I2V) 생성 — LTX2 등 이미지→영상 모델 ───
+// Gradio 파일 업로드: POST {prefix}/upload 에 FormData로 파일을 보내면 서버 임시 경로 배열을 돌려줌.
+// 그 경로를 Gradio의 FileData 구조로 감싸서 이미지 입력 컴포넌트 값으로 사용.
+async function wanUploadFile(url, blob, sessionHash) {
+  const prefix = WAN.prefix !== null ? WAN.prefix : '/gradio_api';
+  const fd = new FormData();
+  fd.append('files', blob, blob.name || 'source.png');
+  const res = await fetch(`${url}${prefix}/upload?upload_id=${sessionHash}`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(`이미지 업로드 실패 HTTP ${res.status}`);
+  const paths = await res.json();
+  const path = Array.isArray(paths) ? paths[0] : paths;
+  return {
+    path, url: `${url}${prefix}/file=${path}`,
+    orig_name: blob.name || 'source.png', size: blob.size,
+    mime_type: blob.type || 'image/png',
+    meta: { _type: 'gradio.FileData' }
+  };
+}
+
+function wanExtractVideo(node) {
+  if (!node) return null;
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const found = wanExtractVideo(node[i]);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof node === 'object') {
+    if (typeof node.url === 'string' && /\.(mp4|webm|mov)(\?|$)/i.test(node.url)) return node;
+    if (typeof node.path === 'string' && /\.(mp4|webm|mov)$/i.test(node.path)) return node;
+    if (node.video) { const found = wanExtractVideo(node.video); if (found) return found; }
+    for (const key in node) {
+      if (key === 'video' || key === 'url' || key === 'path') continue;
+      const found = wanExtractVideo(node[key]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+async function wanFetchVideoBlob(baseUrl, vidInfo) {
+  let fileUrl = vidInfo.url;
+  if (fileUrl) {
+    if (fileUrl.startsWith('/')) fileUrl = baseUrl + fileUrl;
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`영상 다운로드 실패 HTTP ${res.status}`);
+    return await res.blob();
+  }
+  if (!vidInfo.path) throw new Error('영상 URL을 확인할 수 없습니다');
+  const prefixesToTry = WAN.prefix !== null ? [WAN.prefix, WAN.prefix === '' ? '/gradio_api' : ''] : ['/gradio_api', ''];
+  let lastErr = null;
+  for (const prefix of prefixesToTry) {
+    try {
+      const res = await fetch(`${baseUrl}${prefix}/file=${vidInfo.path}`);
+      if (res.ok) return await res.blob();
+      lastErr = new Error(`영상 다운로드 실패 HTTP ${res.status}`);
+    } catch(e) { lastErr = e; }
+  }
+  throw lastErr || new Error('영상 다운로드 실패');
+}
+
+// 이미지 생성과 같은 process_prompt_and_add_tasks 파이프라인을 재사용하되,
+// 1) 소스 이미지를 먼저 업로드해서 I2V "Start Image" 입력 슬롯에 주입하고
+// 2) 프롬프트는 imagePrompts 대신 videoPrompts를 사용하고
+// 3) 결과에서 이미지 대신 영상 파일을 추출한다.
+// 이미지 입력 슬롯의 정확한 컴포넌트 라벨은 서버마다/모델마다 다를 수 있어 자동 탐색하며,
+// 실패 시 로그의 "입력 슬롯 후보" 목록으로 원인을 파악해 조정한다 (이미지 생성 API 붙일 때와 동일한 방식).
+async function generateSceneVideo(idx) {
+  if (!state.sdConnected) { alert("먼저 Wan2GP 연결 확인을 눌러주세요!"); return; }
+  const imgBlob = state.images[idx];
+  if (!imgBlob) { alert("이 씬에 먼저 이미지가 있어야 영상을 생성할 수 있습니다."); return; }
+
+  const url = document.getElementById('sd-url').value.trim().replace(/\/$/, '');
+  const modelChoice = document.getElementById('sd-video-model-custom').value.trim();
+  if (!modelChoice) { alert("영상 모델 ID를 입력해주세요! (예: ltxv_13b)"); return; }
+
+  const motionPrompt = (state.videoPrompts && state.videoPrompts[idx]) ? state.videoPrompts[idx]
+    : ((state.imagePrompts && state.imagePrompts[idx]) ? state.imagePrompts[idx] : state.scenes[idx].text);
+  const prompt = motionPrompt + ", smooth natural motion, cinematic";
+  const resolution = document.getElementById('sd-resolution').value;
+  const videoLength = document.getElementById('sd-video-length').value;
+
+  addLog(`S${idx+1} 씬 영상 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution}, ${videoLength}초)`, 'info');
+
+  try {
+    const config = await wanGetConfig(url);
+    const sessionHash = wanSessionHash();
+    await wanTriggerLoadEvents(url, config, sessionHash);
+    if (!WAN.stateCompId) wanPopulateModelDropdown(config);
+    wanSeedModelType(config, modelChoice);
+    await wanApplyModelViaTarget(url, config, sessionHash, modelChoice);
+    await wanTryRefreshModelDropdowns(url, config, sessionHash, modelChoice);
+
+    addLog(`S${idx+1} 소스 이미지 업로드 중...`, 'info');
+    const uploadedImage = await wanUploadFile(url, imgBlob, sessionHash);
+
+    const save = wanFindDependency(config, 'save_inputs');
+    const saveData = wanBuildData(config, save.dep, {
+      'prompt': prompt, 'resolution': resolution, 'seed': -1,
+      'video length': Number(videoLength), 'num frames': Number(videoLength) * 24,
+      'duration': Number(videoLength)
+    });
+    saveData[0] = 'state';
+
+    // 이미지/파일 타입 입력 슬롯 탐색: 라벨에 start/source/image to video/reference 등이 있으면 우선 채택
+    let imageSlotIdx = -1;
+    const imageSlotCandidates = [];
+    save.dep.inputs.forEach((id, i) => {
+      const c = wanComponentById(config, id);
+      if (!c) return;
+      const isImgLike = c.type === 'image' || c.type === 'file';
+      if (isImgLike || c.type === 'gallery') {
+        const label = (c.props && c.props.label) ? c.props.label : '';
+        imageSlotCandidates.push(`idx${i}(id=${id},type=${c.type},label=${label})`);
+        if (isImgLike && imageSlotIdx === -1 && /start|source|image.?to.?video|input image|reference/i.test(label)) {
+          imageSlotIdx = i;
+        }
+      }
+    });
+    addLog(`이미지/파일 타입 입력 슬롯 후보: ${imageSlotCandidates.join('; ') || '없음'}`, 'info');
+    if (imageSlotIdx === -1) {
+      // 키워드로 못 찾으면 첫 번째 이미지/파일 타입 슬롯을 최선의 추정으로 사용
+      imageSlotIdx = save.dep.inputs.findIndex((id) => {
+        const c = wanComponentById(config, id);
+        return c && (c.type === 'image' || c.type === 'file');
+      });
+    }
+    if (imageSlotIdx === -1) {
+      throw new Error('소스 이미지를 넣을 입력 슬롯을 찾지 못했습니다 (Wan2GP UI에서 I2V 모델을 먼저 선택해야 이미지 업로드 칸이 나타날 수 있습니다). 로그의 "입력 슬롯 후보" 목록을 확인해주세요.');
+    }
+    saveData[imageSlotIdx] = uploadedImage;
+    addLog(`소스 이미지를 입력[${imageSlotIdx}]에 주입함`, 'info');
+
+    const saveOutput = await wanCall(url, save.index, saveData, sessionHash);
+    wanRecordOutputs(save.dep, saveOutput);
+
+    const add = wanFindDependency(config, 'process_prompt_and_add_tasks');
+    const addData = wanBuildData(config, add.dep, {});
+    const addOutput = await wanCall(url, add.index, addData, sessionHash);
+    wanRecordOutputs(add.dep, addOutput);
+
+    for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
+      if ((config.dependencies || []).some(d => d.api_name === step)) {
+        const s = wanFindDependency(config, step);
+        await wanCallDep(url, config, s.dep, s.index, sessionHash, {});
+      }
+    }
+
+    const fin = wanFindDependency(config, 'finalize_generation');
+    const output = await wanCallDep(url, config, fin.dep, fin.index, sessionHash, {});
+
+    const vidInfo = wanExtractVideo(output);
+    if (!vidInfo) throw new Error("생성 결과에서 영상을 찾지 못했습니다 (아직 이미지만 반환되는 모델/설정일 수 있습니다)");
+
+    const blob = await wanFetchVideoBlob(url, vidInfo);
+    const fileName = `gen_scene_${String(idx+1).padStart(2,'0')}.mp4`;
+    blob.name = fileName;
+
+    if (state.outDirHandle) {
+      try {
+        const fileHandle = await state.outDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        addLog(`S${idx+1} 영상 로컬 폴더에 자동 저장 완료: ${fileName}`, 'ok');
+      } catch(err) {
+        addLog(`로컬 파일 저장 실패: ${err.message}`, 'err');
+      }
+    }
+
+    if (!state.videos) state.videos = [];
+    state.videos[idx] = blob;
+    renderSceneEditor();
+    addLog(`S${idx+1} 영상 생성 완료!`, 'ok');
+  } catch(e) {
+    addLog(`영상 생성 실패: ${e.message}`, 'err');
+  }
 }
 
 // ─── 앉 추가 ───
