@@ -1857,6 +1857,15 @@ async function generateSceneVideo(idx) {
           addLog(`current_gallery_tab을 "${videoChoice}"(으)로 강제 전환`, 'info');
           addData[gtIdx] = videoChoice;
         }
+      } else if (gtComp && gtComp.type === 'number') {
+        // choices가 없는 number 타입 = Wan2GP 화면 상단 4개 탭(텍스트 프롬프트=0 / 이미지부터
+        // 시작하세요=1 / 동영상 계속 보기=2 / 이전 영상 계속 보기=3)의 인덱스로 추정됨. 지금까지
+        // 계속 0(텍스트 프롬프트)으로 남아있어서, gallery에 시작 이미지를 넣어도 실제로는 T2V
+        // 모드로 생성되고 있었을 가능성이 높음. "이미지부터 시작하세요"에 해당하는 1로 강제 설정.
+        if (addData[gtIdx] !== 1) {
+          addLog(`current_gallery_tab(숫자, 탭 인덱스로 추정)을 0(텍스트 프롬프트)에서 1(이미지부터 시작하세요)로 강제 전환`, 'ok');
+          addData[gtIdx] = 1;
+        }
       }
     }
 
