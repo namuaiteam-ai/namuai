@@ -1798,9 +1798,10 @@ async function generateSceneVideo(idx) {
     if (imageSlotIdx === -1) {
       throw new Error('소스 이미지를 넣을 입력 슬롯을 찾지 못했습니다 (Wan2GP UI에서 I2V 모델을 먼저 선택해야 이미지 업로드 칸이 나타날 수 있습니다). 로그의 "입력 슬롯 후보" 목록을 확인해주세요.');
     }
-    // gallery 타입 컴포넌트는 단일 파일이 아니라 [이미지, 캡션] 쌍의 리스트를 값으로 기대함
-    // (Gradio Gallery 표준 포맷). image/file 타입은 파일 참조 그대로 사용.
-    saveData[imageSlotIdx] = imageSlotIsGallery ? [[uploadedImage, null]] : uploadedImage;
+    // gallery 타입 컴포넌트는 서버 트레이스백(pydantic GalleryData 검증 에러)으로 확인된 정확한
+    // 스키마를 사용: 각 항목은 [file, caption] 튜플이 아니라 {image: FileData, caption} 객체여야 함
+    // (GalleryImage 모델). image/file 타입은 파일 참조 그대로 사용.
+    saveData[imageSlotIdx] = imageSlotIsGallery ? [{ image: uploadedImage, caption: null }] : uploadedImage;
     addLog(`소스 이미지를 입력[${imageSlotIdx}]${imageSlotIsGallery ? '(gallery)' : ''}에 주입함`, 'info');
 
     const saveOutput = await wanCall(url, save.index, saveData, sessionHash);
