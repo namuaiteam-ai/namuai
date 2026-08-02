@@ -1713,11 +1713,30 @@ async function generateSceneVideo(idx) {
 
     const save = wanFindDependency(config, 'save_inputs');
     const saveData = wanBuildData(config, save.dep, {
-      'prompt': prompt, 'resolution': resolution, 'seed': -1,
-      'video length': Number(videoLength), 'num frames': Number(videoLength) * 24,
-      'duration': Number(videoLength)
+      'prompt': prompt, 'resolution': resolution, 'seed': -1
     });
     saveData[0] = 'state';
+
+    // 실제 라벨 확인 결과: "Number of frames (16 frames = 1s), current duration: 5.1s" 슬라이더가
+    // 진짜 영상 길이 컴포넌트. 이전엔 override 키 'duration'이 이 라벨에 "duration"이라는 단어가
+    // 우연히 포함된 것 때문에 매치되어 초(5) 값을 그대로 프레임 수로 밀어넣는 바람에 5프레임(<1초)
+    // 짜리 영상이 나왔음. 게다가 "Max Duration"이라는 별개 슬라이더도 같은 키워드로 잘못 덮어써짐.
+    // 이제 라벨 패턴으로 정확히 이 슬라이더 하나만 찾아 fps(라벨에 명시된 값)를 파싱해서
+    // 초 단위 설정을 프레임 수로 정확히 환산해 설정.
+    let frameSlotIdx = -1, framesPerSecond = 16;
+    save.dep.inputs.forEach((id, i) => {
+      const c = wanComponentById(config, id);
+      const label = (c && c.props && c.props.label) ? c.props.label : '';
+      const m = label.match(/^Number of frames\s*\((\d+)\s*frames?\s*=\s*1s\)/i);
+      if (m) { frameSlotIdx = i; framesPerSecond = Number(m[1]); }
+    });
+    if (frameSlotIdx !== -1) {
+      const targetFrames = Math.round(Number(videoLength) * framesPerSecond);
+      saveData[frameSlotIdx] = targetFrames;
+      addLog(`영상 길이 슬라이더(idx${frameSlotIdx}, ${framesPerSecond}fps 기준)를 ${targetFrames}프레임(${videoLength}초)으로 설정함`, 'ok');
+    } else {
+      addLog(`"Number of frames" 슬라이더를 찾지 못해 영상 길이는 서버 기본값이 그대로 사용됩니다`, 'warn');
+    }
 
     // 이미지/파일 타입 입력 슬롯 탐색: 라벨에 start/source/image to video/reference 등이 있으면 우선 채택
     let imageSlotIdx = -1;
