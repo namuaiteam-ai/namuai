@@ -98,7 +98,7 @@
   .file-input { display: none; }
 
   .preview-flex { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
-  .preview-item { width: 48px; height: 48px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--border); position: relative; margin-bottom: 22px; }
+  .preview-item { width: 96px; height: 96px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--border); position: relative; margin-bottom: 22px; }
   .preview-item .img-ctrl { position: absolute; bottom: -22px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; }
   .preview-item .img-ctrl button { background: var(--surface-solid, #111); border: 1px solid var(--border); color: var(--text); font-size: 9px; padding: 1px 3px; border-radius: 4px; cursor: pointer; line-height: 1.4; }
   .preview-item .img-ctrl button:hover { background: var(--accent2); border-color: var(--accent2); }
@@ -640,6 +640,7 @@ function handleImages(files, skipSort) {
     d.appendChild(ctrl);
     p.appendChild(d);
   });
+  renderSceneEditor();
   checkReady();
 }
 
