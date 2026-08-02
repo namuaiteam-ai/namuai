@@ -134,6 +134,13 @@
     padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; outline: none;
     min-height: 60px; line-height: 1.4;
   }
+  .scene-img-card .card-video-prompt {
+    font-size: 11px; color: #4fd1c5; font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.4); border: 1px dashed var(--border); border-radius: 6px;
+    padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; outline: none;
+    min-height: 44px; line-height: 1.4;
+  }
+  .scene-img-card .card-video-prompt::placeholder { color: var(--muted); }
   .scene-img-card .card-actions { display: flex; gap: 6px; }
   .scene-img-card .btn-regen { flex: 1; background: rgba(255,107,53,0.15); border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
   .scene-img-card .btn-regen:hover { background: var(--accent); color: #fff; }
@@ -432,6 +439,7 @@ let state = {
   blob169: null,
   sdConnected: false,
   imagePrompts: [],
+  videoPrompts: [],
   outDirHandle: null
 };
 
@@ -545,6 +553,7 @@ async function handleZip(file) {
           const data = JSON.parse(jsonText);
           const sd = Array.isArray(data) ? data[0] : data;
           if (sd && sd.image_prompts) state.imagePrompts = sd.image_prompts;
+          if (sd && sd.video_prompts) state.videoPrompts = sd.video_prompts;
         } catch(e) {}
       } else if (n.endsWith('.txt')) {
         const txt = await entry.async("text");
@@ -561,6 +570,14 @@ async function handleZip(file) {
           if (state.imagePrompts.length === 0 && lines.some(l => /^[a-zA-Z]/.test(l))) {
             state.imagePrompts = lines;
           }
+        }
+        // script.txt 안의 "영상 프롬프트:" 접두어 작성 줄만 추출 (I2V용 모션 프롬프트)
+        const vidPromptLines = txt.split(/\r?\n/)
+          .filter(l => l.includes('영상 프롬프트:'))
+          .map(l => l.split('영상 프롬프트:')[1].trim());
+        if (vidPromptLines.length > 0) {
+          state.videoPrompts = vidPromptLines;
+          addLog(`script.txt에서 영상 프롬프트 ${vidPromptLines.length}개 추출 완료!`, 'ok');
         }
         // SRT가 없으면 나레이션 텍스트 추출
         if (!srtText) {
@@ -586,7 +603,7 @@ async function handleZip(file) {
     if (audioBlob) handleAudio(audioBlob);
     if (srtText) await parseSrtContent(srtText);
     
-    addLog(`ZIP 로드 완료 (이미지 ${imgBlobs.length}, 오디오 ${audioBlob?'O':'X'}, 자막 ${srtText?'O':'X'}, 프롬프트 ${state.imagePrompts.length>0?'O':'X'})`, 'ok');
+    addLog(`ZIP 로드 완료 (이미지 ${imgBlobs.length}, 오디오 ${audioBlob?'O':'X'}, 자막 ${srtText?'O':'X'}, 이미지프롬프트 ${state.imagePrompts.length>0?'O':'X'}, 영상프롬프트 ${state.videoPrompts.length>0?'O':'X'})`, 'ok');
     
     // 이미지가 없고 프롬프트가 있으면 자동 생성 제안
     if (imgBlobs.length === 0 && state.imagePrompts.length > 0 && state.scenes.length > 0) {
@@ -735,6 +752,7 @@ function renderSceneEditor() {
   state.scenes.forEach((sc, i) => {
     const imgBlob = state.images[i];
     const promptVal = (state.imagePrompts && state.imagePrompts[i]) ? state.imagePrompts[i] : sc.text;
+    const videoPromptVal = (state.videoPrompts && state.videoPrompts[i]) ? state.videoPrompts[i] : '';
     const thumbSrc = imgBlob ? URL.createObjectURL(imgBlob) : null;
 
     const card = document.createElement('div');
@@ -752,6 +770,7 @@ function renderSceneEditor() {
         </div>
         <div class="card-narr">${sc.text}</div>
         <textarea class="card-prompt" id="prompt-${i}" oninput="state.imagePrompts[${i}]=this.value">${promptVal}</textarea>
+        <textarea class="card-video-prompt" id="videoPrompt-${i}" placeholder="🎬 영상(I2V) 프롬프트 — 카메라/동작 움직임 묘사 (선택)" oninput="state.videoPrompts[${i}]=this.value">${videoPromptVal}</textarea>
         <div class="card-actions">
           <button class="btn-regen" onclick="regenSceneImage(${i})">✨ 재생성</button>
           ${thumbSrc ? `<button class="btn-zoom" onclick="openSceneLightbox(${i})">🔍 크게 보기</button>` : ''}
@@ -1354,6 +1373,7 @@ async function generateAllMissingImages(forceAll = false) {
 function addScene() {
   state.scenes.push({ text: '새 쒜 내용을 입력하세요', start: null, end: null });
   state.imagePrompts.push('');
+  state.videoPrompts.push('');
   renderSceneEditor();
   addLog('씼 추가됨 (SRT 파일에는 반영되지 않음)', 'info');
 }
