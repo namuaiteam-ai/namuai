@@ -1788,6 +1788,27 @@ async function generateSceneVideo(idx) {
       }
     });
     addLog(`영상 길이 관련 입력 슬롯 후보: ${lengthSlotCandidates.join('; ') || '없음'}`, 'info');
+
+    // 진단: 결과 영상이 원본 이미지를 실제로 참조하지 않는 문제 확인용.
+    // "제어 비디오/프레임 주입" 모드 드롭다운이나 "소스 강도(Source Strength)" 슬라이더가
+    // 우리가 주입한 gallery 이미지를 실제로 쓰도록 별도 설정돼야 할 가능성이 있어 전부 나열.
+    const modeDropdownCandidates = [];
+    const strengthSlotCandidates = [];
+    save.dep.inputs.forEach((id, i) => {
+      const c = wanComponentById(config, id);
+      if (!c) return;
+      const label = (c.props && c.props.label) ? c.props.label : '';
+      if ((c.type === 'dropdown' || c.type === 'radio') && /control|video process|guide|inject|source|mode/i.test(label)) {
+        const choices = c.props && Array.isArray(c.props.choices) ? c.props.choices.map(ch => Array.isArray(ch) ? ch[1] : ch) : null;
+        modeDropdownCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${JSON.stringify(c.props ? c.props.value : '?')},choices=${JSON.stringify(choices)})`);
+      }
+      if (c.type === 'slider' && /strength|denois|weight/i.test(label)) {
+        strengthSlotCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${c.props ? c.props.value : '?'})`);
+      }
+    });
+    addLog(`모드/제어 드롭다운 후보: ${modeDropdownCandidates.join('; ') || '없음'}`, 'info');
+    addLog(`강도(strength) 관련 슬롯 후보: ${strengthSlotCandidates.join('; ') || '없음'}`, 'info');
+
     if (imageSlotIdx === -1) {
       // 키워드로 못 찾으면 첫 번째 이미지/파일 타입 슬롯을 최선의 추정으로 사용
       imageSlotIdx = save.dep.inputs.findIndex((id) => {
