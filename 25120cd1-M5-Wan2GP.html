@@ -1739,10 +1739,21 @@ async function generateSceneVideo(idx) {
     saveData[VIDEO_LENGTH_IDX] = targetFrames;
     addLog(`영상 길이(idx${VIDEO_LENGTH_IDX}, 24fps+1 공식)를 ${targetFrames}프레임(${videoLength}초 목표)으로 설정함`, 'ok');
 
-    const IMAGE_PROMPT_TYPE_IDX = 21;
-    const iptComp = wanComponentById(config, save.dep.inputs[IMAGE_PROMPT_TYPE_IDX]);
-    addLog(`[위치기반] image_prompt_type 추정 idx${IMAGE_PROMPT_TYPE_IDX}: id=${save.dep.inputs[IMAGE_PROMPT_TYPE_IDX]} type=${iptComp ? iptComp.type : '?'} label="${iptComp && iptComp.props ? iptComp.props.label : '?'}" 기존값=${JSON.stringify(saveData[IMAGE_PROMPT_TYPE_IDX])} → "S"로 설정`, 'ok');
-    saveData[IMAGE_PROMPT_TYPE_IDX] = 'S';
+    // image_prompt_type("S")의 정확한 위치는 아직 못 찾음 - idx21은 실제로는 "Guidance Phases"
+    // (choices=[1,2,3])였음이 실패 로그로 확인됨(위치 정렬이 video_length 이후로는 어긋남,
+    // 아마 seed/batch_size 등 일부 파라미터가 실제로는 슬라이더+체크박스 등 2개 이상의 실제
+    // 컴포넌트로 쪼개져 있어서 단순 키 개수만큼 밀리지 않는 것으로 추정). image_prompt_type이
+    // 우리 라디오/드롭다운 전체 덤프(30개)에도 없었던 걸 보면 textbox 타입(숨김 필드)일 가능성이
+    // 높아 textbox 타입 전체를 진단 로그로 나열 - 다음 라운드에 정확한 위치를 찾기 위함.
+    const textboxCandidates = [];
+    save.dep.inputs.forEach((id, i) => {
+      const c = wanComponentById(config, id);
+      if (!c || c.type !== 'textbox') return;
+      const label = (c.props && c.props.label) ? c.props.label : '';
+      const val = c.props ? c.props.value : undefined;
+      textboxCandidates.push(`idx${i}(id=${id},label="${label}",현재값=${JSON.stringify(val)})`);
+    });
+    addLog(`textbox 타입 전체(${textboxCandidates.length}개): ${textboxCandidates.join(' || ') || '없음'}`, 'info');
 
     // 이미지/파일 타입 입력 슬롯 탐색.
     // 실제 로그 확인 결과, 진짜 I2V 시작 이미지 슬롯은 "Images as starting points for new Videos
