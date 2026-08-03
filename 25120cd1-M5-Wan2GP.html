@@ -1919,11 +1919,18 @@ async function generateSceneVideo(idx) {
     const addOutput = await wanCall(url, add.index, addData, sessionHash);
     wanRecordOutputs(add.dep, addOutput);
 
-    for (const step of ['init_generate', 'activate_status', 'process_tasks']) {
-      if ((config.dependencies || []).some(d => d.api_name === step)) {
-        const s = wanFindDependency(config, step);
-        await wanCallDep(url, config, s.dep, s.index, sessionHash, {});
-      }
+    // 이미지 생성 쪽 코드를 그대로 복사해 왔던 부분인데, 영상에서는 "3개가 만들어진다"는 문제로
+    // 확인됨 - init_generate/activate_status/process_tasks 중 이 서버에 실제로 존재하는 게
+    // 여러 개면, 그중 존재하는 것 전부를 순서대로 호출하고 있었음. 각각이 "지금 생성 시작"을
+    // 독립적으로 트리거하는 것으로 보여, 3개가 다 존재하면 생성이 3번 따로 실행됐던 것.
+    // 존재하는 첫 번째 것 하나만 호출하도록 수정(원래 의도는 "버전별로 있는 것만" 골라 쓰자는
+    // 것이었지 "있는 걸 전부 다" 호출하자는 게 아니었음).
+    const pipelineSteps = ['init_generate', 'activate_status', 'process_tasks'];
+    const existingSteps = pipelineSteps.filter(step => (config.dependencies || []).some(d => d.api_name === step));
+    addLog(`생성 파이프라인 단계 중 이 서버에 존재하는 것: [${existingSteps.join(', ')}] - 이 중 첫 번째만 호출함`, 'info');
+    if (existingSteps.length > 0) {
+      const s = wanFindDependency(config, existingSteps[0]);
+      await wanCallDep(url, config, s.dep, s.index, sessionHash, {});
     }
 
     const fin = wanFindDependency(config, 'finalize_generation');
