@@ -477,6 +477,8 @@ let state = {
   isRendering: false,
   blob916: null,
   blob169: null,
+  blob916Ext: 'webm',
+  blob169Ext: 'webm',
   sdConnected: false,
   imagePrompts: [],
   videoPrompts: [],
@@ -848,7 +850,7 @@ async function renderFinalVideoClips() {
   const dest = audioCtx.createMediaStreamDestination();
   const stream = canvas.captureStream(30);
   const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+  const { mimeType, ext } = wanPickRecorderFormat();
   const bitrate = parseInt(document.getElementById('quality')?.value || '8000000');
   const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
   let chunks = [];
@@ -870,16 +872,17 @@ async function renderFinalVideoClips() {
     await audioCtx.close();
   }
 
-  const blob = new Blob(chunks, { type: 'video/webm' });
+  const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
   const url = URL.createObjectURL(blob);
   const vidEl = document.getElementById('finalClipsVideo');
   vidEl.src = url;
   vidEl.style.display = 'block';
   const dlLink = document.getElementById('finalClipsDownload');
   dlLink.href = url;
+  dlLink.download = `final_clips_${Date.now()}.${ext}`;
   dlLink.style.display = 'inline-block';
   progEl.style.display = 'none';
-  addLog('✅ 영상 클립 조립 완료!', 'ok');
+  addLog(`✅ 영상 클립 조립 완료! (${ext} 형식)`, 'ok');
 }
 
 function handleAudio(file) {
@@ -916,6 +919,23 @@ function secToSrt(sec) {
   const s = Math.floor(sec % 60);
   const ms = Math.round((sec - Math.floor(sec)) * 1000);
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+}
+
+// 브라우저가 지원하면 MP4(H.264+AAC)로 바로 녹화, 아니면 WebM으로 폴백.
+// 최신 Chrome은 MediaRecorder로 MP4 직접 녹화를 지원하는 경우가 많아, 지원되면 별도 변환
+// 없이 곧바로 mp4 파일로 결과물이 나오게 함(재생 호환성이 webm보다 훨씬 좋음).
+function wanPickRecorderFormat() {
+  const candidates = [
+    { mimeType: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', ext: 'mp4' },
+    { mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
+    { mimeType: 'video/mp4', ext: 'mp4' },
+    { mimeType: 'video/webm;codecs=vp9', ext: 'webm' },
+    { mimeType: 'video/webm', ext: 'webm' },
+  ];
+  for (const c of candidates) {
+    if (MediaRecorder.isTypeSupported(c.mimeType)) return c;
+  }
+  return { mimeType: 'video/webm', ext: 'webm' };
 }
 
 function parseSrtTime(t) {
@@ -2151,12 +2171,12 @@ async function startProduction({ scenes, images, videoEls, thumbImg, audioBuffer
     }
 
     const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    const { mimeType, ext } = wanPickRecorderFormat();
     const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
     recorder.ondataavailable = e => chunks.push(e.data);
     recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      if (label === '916') state.blob916 = blob; else state.blob169 = blob;
+      const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+      if (label === '916') { state.blob916 = blob; state.blob916Ext = ext; } else { state.blob169 = blob; state.blob169Ext = ext; }
       resolve();
     };
 
@@ -2311,10 +2331,11 @@ function drawAnimatedSubtitle(ctx, text, progress, W, H) {
 
 function downloadVideo(ratio) {
   const blob = ratio === '916' ? state.blob916 : state.blob169;
+  const ext = (ratio === '916' ? state.blob916Ext : state.blob169Ext) || 'webm';
   if (!blob) return;
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `ShortsForge_${ratio}_${Date.now()}.webm`;
+  a.download = `ShortsForge_${ratio}_${Date.now()}.${ext}`;
   a.click();
 }
 
