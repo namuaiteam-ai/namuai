@@ -1061,6 +1061,10 @@ function wanBuildData(config, dep, overrides) {
         // 숫자 컴포넌트(슬라이더 등)에는 숫자가 아닌 값(예: 프롬프트 텍스트)을 절대 넣지 않음.
         // "Num. of Generated Videos per Prompt"처럼 라벨에 우연히 override 키워드가
         // 들어간 숫자 필드를 텍스트로 오염시키는 것을 방지.
+      } else if (comp && (comp.type === 'image' || comp.type === 'file' || comp.type === 'gallery') && typeof val !== 'object') {
+        // 위와 같은 이유로, 파일/이미지/갤러리 타입 컴포넌트에는 문자열(프롬프트 등)을 절대 넣지
+        // 않음. 실제로 라벨에 "prompt"가 우연히 포함된 FileData 타입 필드에 프롬프트 텍스트가
+        // 그대로 들어가 pydantic 검증 에러("meta 필드 필요")가 난 사례로 확인된 문제를 방지.
       } else {
         data[idx] = val;
       }
