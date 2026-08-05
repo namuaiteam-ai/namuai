@@ -1702,7 +1702,10 @@ async function generateSceneVideo(idx) {
   addLog(`S${idx+1} 씬 영상 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution}, ${videoLength}초)`, 'info');
 
   try {
-    wanResetSession(); // 이전 시도의 세션/큐가 이번 결과와 뒤섞이지 않도록 항상 새로 시작
+    // wanResetSession()을 매번 호출하던 걸 제거함 - 그 문제(응답 뒤섞임)의 진짜 원인은
+    // image_prompt_type/gallery 값 등 파라미터 문제였던 것으로 확인됨. 매번 새 세션을 강제하면
+    // Wan2GP가 매번 새 클라이언트로 취급해 모델을 다시 로드/초기화하는 오버헤드가 생겨
+    // WebUI보다 느려지는 원인이 된 것으로 보임 - 세션을 재사용하도록 되돌림.
     const config = await wanGetConfig(url, true);
     const sessionHash = wanSessionHash();
     await wanTriggerLoadEvents(url, config, sessionHash);
