@@ -2060,6 +2060,23 @@ async function handleRender() {
       });
     }));
 
+    // 씬별 생성된 영상(state.videos)이 있으면 그 씬 구간엔 정지 이미지 대신 실제 영상을 재생.
+    // 영상 자체 오디오는 나레이션과 겹치지 않게 음소거하고, 씬 배정 구간(imgDur)보다 짧으면
+    // 자동으로 반복 재생(loop)됨.
+    const videoEls = await Promise.all(state.scenes.map((_, i) => {
+      const vBlob = state.videos && state.videos[i];
+      if (!vBlob) return Promise.resolve(null);
+      return new Promise((res) => {
+        const v = document.createElement('video');
+        v.src = URL.createObjectURL(vBlob);
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.onloadedmetadata = () => res(v);
+        v.onerror = () => res(null);
+      });
+    }));
+
     // 썬네일 로드
     let thumbImgEl = null;
     if (state.thumbnail) {
@@ -2080,10 +2097,10 @@ async function handleRender() {
     const bgmVolume = parseInt(document.getElementById('bgmVolume')?.value || '15') / 100;
 
     addLog('▶ 9:16 세로 영상 렌더링...', 'info');
-    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1080, H: 1920, label: '916', playbackRate });
+    await startProduction({ scenes: state.scenes, images, videoEls, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1080, H: 1920, label: '916', playbackRate });
 
     addLog('▶ 16:9 가로 영상 렌더링...', 'info');
-    await startProduction({ scenes: state.scenes, images, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1920, H: 1080, label: '169', playbackRate });
+    await startProduction({ scenes: state.scenes, images, videoEls, thumbImg: thumbImgEl, audioBuffer, bgmBuffer, bgmVolume, audioCtx, W: 1920, H: 1080, label: '169', playbackRate });
 
     UI.resVid.src = URL.createObjectURL(state.blob916);
     UI.resVid.style.display = 'block';
@@ -2099,8 +2116,9 @@ async function handleRender() {
   }
 }
 
-async function startProduction({ scenes, images, thumbImg, audioBuffer, bgmBuffer, bgmVolume = 0.15, audioCtx, W, H, label, playbackRate = 1.0 }) {
+async function startProduction({ scenes, images, videoEls, thumbImg, audioBuffer, bgmBuffer, bgmVolume = 0.15, audioCtx, W, H, label, playbackRate = 1.0 }) {
   return new Promise((resolve) => {
+    let activeVideoIdx = -1; // 현재 재생 중인 씬 영상 인덱스 (씬 전환 시 이전 영상 정지용)
     UI.viz.width = W; UI.viz.height = H;
     const ctx = UI.viz.getContext('2d');
     const totalDuration = audioBuffer.duration / playbackRate;
@@ -2152,6 +2170,7 @@ async function startProduction({ scenes, images, thumbImg, audioBuffer, bgmBuffe
       if (frame >= totalFrames) {
         recorder.stop(); source.stop();
         if (bgmSource) bgmSource.stop();
+        if (activeVideoIdx !== -1 && videoEls && videoEls[activeVideoIdx]) videoEls[activeVideoIdx].pause();
         return;
       }
       const elapsed = frame / fps;
@@ -2175,8 +2194,23 @@ async function startProduction({ scenes, images, thumbImg, audioBuffer, bgmBuffe
         const imgIdx = Math.min(Math.floor(contentElapsed / imgDur), images.length - 1);
         const img = images[imgIdx];
         const imgLocalProgress = Math.min((contentElapsed - imgIdx * imgDur) / imgDur, 1);
+        const vidEl = videoEls && videoEls[imgIdx];
 
-        if (img) {
+        if (vidEl) {
+          // 이 씬은 생성된 영상이 있음 - 정지 이미지 대신 실제 영상 프레임을 그림.
+          // 씬 전환 시(imgIdx가 바뀔 때)만 새로 재생 시작, 이전 영상은 멈춤.
+          if (activeVideoIdx !== imgIdx) {
+            if (activeVideoIdx !== -1 && videoEls[activeVideoIdx]) videoEls[activeVideoIdx].pause();
+            vidEl.currentTime = 0;
+            vidEl.play().catch(()=>{});
+            activeVideoIdx = imgIdx;
+          }
+          if (vidEl.videoWidth) {
+            const scale = Math.max(W / vidEl.videoWidth, H / vidEl.videoHeight);
+            const dw = vidEl.videoWidth * scale, dh = vidEl.videoHeight * scale;
+            ctx.drawImage(vidEl, (W - dw) / 2, (H - dh) / 2, dw, dh);
+          }
+        } else if (img) {
           if (transition === 'kenburns') {
             // Ken Burns: 이미지마다 방향 교대로 팬/줌
             const zoom = 1.0 + imgLocalProgress * 0.08;
