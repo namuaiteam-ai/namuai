@@ -616,46 +616,84 @@ async function handleZip(file) {
         } catch(e) {}
       } else if (n.endsWith('.txt')) {
         const txt = await entry.async("text");
-        // script.txt 안의 "이미지 프롬프트:" 접두어 작성 줄만 추출
-        const imgPromptLines = txt.split(/\r?\n/)
-          .filter(l => l.includes('이미지 프롬프트:'))
-          .map(l => l.split('이미지 프롬프트:')[1].trim());
-        if (imgPromptLines.length > 0) {
-          state.imagePrompts = imgPromptLines;
-          addLog(`script.txt에서 이미지 프롬프트 ${imgPromptLines.length}개 추출 완료!`, 'ok');
-        } else {
-          // 일반 영문 줄 (json이 없을 때만)
-          const lines = txt.split(/\r?\n/).filter(l => l.trim().length > 5);
-          if (state.imagePrompts.length === 0 && lines.some(l => /^[a-zA-Z]/.test(l))) {
-            state.imagePrompts = lines;
+        // 씬 블록(빈 줄로 구분, "나레이션:"이 포함된 문단) 단위로 나레이션/이미지 프롬프트/
+        // 영상 프롬프트를 함께 추출. 예전엔 "이미지 프롬프트:"/"비디오 프롬프트:" 줄을 파일
+        // 전체에서 각각 따로 필터링해서 인덱스로 매칭했는데, 한 씬이라도 어느 한쪽이 빠지면
+        // 그 다음 씬부터 전부 밀려서 이미지/영상 프롬프트 구간이 서로 안 맞는 문제가 있었음.
+        // 블록 단위로 같이 추출하면 특정 씬에 필드가 빠져도 그 씬만 빈 값이 되고 나머지는 안 밀림.
+        const blocks = txt.split(/\r?\n\s*\r?\n/).filter(b => /나레이션\s*:/.test(b));
+        if (blocks.length > 0) {
+          const blockImgPrompts = [], blockVidPrompts = [], blockNarrLines = [];
+          blocks.forEach(block => {
+            const lines = block.split(/\r?\n/);
+            const imgLine = lines.find(l => l.includes('이미지 프롬프트:'));
+            const vidLine = lines.find(l => l.includes('비디오 프롬프트:') || l.includes('영상 프롬프트:'));
+            const narrLine = lines.find(l => l.includes('나레이션:'));
+            blockImgPrompts.push(imgLine ? imgLine.split('이미지 프롬프트:')[1].trim() : '');
+            if (vidLine) {
+              const prefix = vidLine.includes('비디오 프롬프트:') ? '비디오 프롬프트:' : '영상 프롬프트:';
+              blockVidPrompts.push(vidLine.split(prefix)[1].trim());
+            } else {
+              blockVidPrompts.push('');
+            }
+            blockNarrLines.push(narrLine ? narrLine.split('나레이션:')[1].trim() : '');
+          });
+          if (blockImgPrompts.some(p => p)) {
+            state.imagePrompts = blockImgPrompts;
+            addLog(`script.txt에서 씬 블록 기준 이미지 프롬프트 ${blockImgPrompts.filter(p=>p).length}/${blocks.length}개 추출 완료!`, 'ok');
           }
-        }
-        // script.txt 안의 "비디오 프롬프트:" / "영상 프롬프트:" 접두어 작성 줄만 추출 (I2V용 모션 프롬프트)
-        const vidPromptPrefix = ['비디오 프롬프트:', '영상 프롬프트:'].find(p => txt.includes(p));
-        const vidPromptLines = vidPromptPrefix
-          ? txt.split(/\r?\n/)
-              .filter(l => l.includes(vidPromptPrefix))
-              .map(l => l.split(vidPromptPrefix)[1].trim())
-          : [];
-        if (vidPromptLines.length > 0) {
-          state.videoPrompts = vidPromptLines;
-          addLog(`script.txt에서 영상(비디오) 프롬프트 ${vidPromptLines.length}개 추출 완료!`, 'ok');
-        }
-        // SRT가 없으면 나레이션 텍스트 추출
-        if (!srtText) {
-          const narrLines = txt.split(/\r?\n/)
-            .filter(l => l.includes('나레이션:'))
-            .map(l => l.split('나레이션:')[1].trim())
-            .filter(l => l.length > 0);
-          if (narrLines.length > 0 && !state.scenes.length) {
-            // SRT 형식으로 변환
+          if (blockVidPrompts.some(p => p)) {
+            state.videoPrompts = blockVidPrompts;
+            addLog(`script.txt에서 씬 블록 기준 영상 프롬프트 ${blockVidPrompts.filter(p=>p).length}/${blocks.length}개 추출 완료!`, 'ok');
+          }
+          if (!srtText && blockNarrLines.some(l => l)) {
             let fakeSrt = '';
-            narrLines.forEach((line, i) => {
+            blockNarrLines.forEach((line, i) => {
               const s = i * 5, e = s + 4.9;
-              fakeSrt += `${i+1}\n${secToSrt(s)} --> ${secToSrt(e)}\n${line}\n\n`;
+              fakeSrt += `${i+1}\n${secToSrt(s)} --> ${secToSrt(e)}\n${line || ''}\n\n`;
             });
             srtText = fakeSrt;
-            addLog(`script.txt 나레이션 ${narrLines.length}줄 추출 완료!`, 'ok');
+            addLog(`script.txt 나레이션 ${blockNarrLines.length}줄(씬 블록 기준) 추출 완료!`, 'ok');
+          }
+        } else {
+          // "나레이션:"이 포함된 블록을 못 찾으면(형식이 다른 경우) 기존 방식(파일 전체 기준
+          // 각각 필터링)으로 폴백 - 씬 개수가 딱 맞으면 문제 없음
+          const imgPromptLines = txt.split(/\r?\n/)
+            .filter(l => l.includes('이미지 프롬프트:'))
+            .map(l => l.split('이미지 프롬프트:')[1].trim());
+          if (imgPromptLines.length > 0) {
+            state.imagePrompts = imgPromptLines;
+            addLog(`script.txt에서 이미지 프롬프트 ${imgPromptLines.length}개 추출 완료!(폴백)`, 'ok');
+          } else {
+            const lines = txt.split(/\r?\n/).filter(l => l.trim().length > 5);
+            if (state.imagePrompts.length === 0 && lines.some(l => /^[a-zA-Z]/.test(l))) {
+              state.imagePrompts = lines;
+            }
+          }
+          const vidPromptPrefix = ['비디오 프롬프트:', '영상 프롬프트:'].find(p => txt.includes(p));
+          const vidPromptLines = vidPromptPrefix
+            ? txt.split(/\r?\n/)
+                .filter(l => l.includes(vidPromptPrefix))
+                .map(l => l.split(vidPromptPrefix)[1].trim())
+            : [];
+          if (vidPromptLines.length > 0) {
+            state.videoPrompts = vidPromptLines;
+            addLog(`script.txt에서 영상(비디오) 프롬프트 ${vidPromptLines.length}개 추출 완료!(폴백)`, 'ok');
+          }
+          if (!srtText) {
+            const narrLines = txt.split(/\r?\n/)
+              .filter(l => l.includes('나레이션:'))
+              .map(l => l.split('나레이션:')[1].trim())
+              .filter(l => l.length > 0);
+            if (narrLines.length > 0 && !state.scenes.length) {
+              let fakeSrt = '';
+              narrLines.forEach((line, i) => {
+                const s = i * 5, e = s + 4.9;
+                fakeSrt += `${i+1}\n${secToSrt(s)} --> ${secToSrt(e)}\n${line}\n\n`;
+              });
+              srtText = fakeSrt;
+              addLog(`script.txt 나레이션 ${narrLines.length}줄 추출 완료!(폴백)`, 'ok');
+            }
           }
         }
       }
