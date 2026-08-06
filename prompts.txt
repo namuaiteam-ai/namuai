@@ -1,8 +1,6 @@
-# 한 줄에 프롬프트 하나씩 적어주세요. #으로 시작하는 줄은 주석(무시됨)입니다.
-# 아래는 예시 프롬프트이니 실제 script.txt의 "이미지 프롬프트:" 내용으로 바꿔서 쓰세요.
-A close-up of a digital thermometer displaying '42.5' with a blurry background of a modern Korean city street under a blazing sun, intense heat haze, high contrast, realistic photography.
-Wide shot of Yangsan city in South Korea, extreme heat haze shimmering over the asphalt roads and buildings, glaring sunlight, bright blue sky, no text.
-Dry and cracked mud of a reservoir floor in rural Korea, deep cracks in the earth, extreme drought conditions, dramatic low angle, no logos.
-A South Korean government emergency meeting room, officials in yellow civil defense uniforms discussing intensely, large screens with weather maps in the background, professional atmosphere.
-A Korean social worker checking the health of an elderly Korean man in a cooling center, a fan is running nearby, empathetic atmosphere, natural lighting.
-A Korean person drinking cold water from a bottle indoors, sunlight streaming through a window, looking relieved, refreshing atmosphere, no text.
+A close-up shot of a shocked Korean male stock trader looking at a digital tablet with a sharp downward red graph, professional office background in Seoul, high tension atmosphere, no text, no logos.
+Modern digital stock exchange interior in Seoul, Yeouido district, blurred digital financial data moving fast on screens, futuristic and cold blue lighting, no text, no logos, high-tech vibe.
+Close-up of a Korean woman's hands holding a smartphone displaying a complex stock candle chart with extreme volatility, Seoul city night view background through a window, no text, no logos.
+A depressed Korean salaryman sitting in a dark office in Seoul, holding his head in despair, dramatic lighting, lonely and heavy atmosphere, no logos.
+Grand exterior of a financial government building in Yeouido, Seoul, South Korea, busy Korean people in suits walking by, professional and serious atmosphere, no text, no logos.
+A professional Korean male news creator looking into the camera with a warning gesture, modern YouTube studio background with blurred digital screens, high quality, no text.
