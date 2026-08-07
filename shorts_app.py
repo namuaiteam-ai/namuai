@@ -25,6 +25,14 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 JOBS: dict = {}
 JOBS_LOCK = threading.Lock()
 
+# ─── 이미지 프롬프트 생성 (zip 업로드 → Gemini 자동화 확장 프로그램 연동) ───────
+PROMPT_DIR = Path(os.environ.get("PROMPT_UPLOAD_DIR", "prompt_jobs"))
+PROMPT_DIR.mkdir(exist_ok=True)
+
+# job_id → {job_id, items: [{id, name, prompt, source_filename, status, message}], style, ...}
+PROMPT_JOBS: dict = {}
+PROMPT_JOBS_LOCK = threading.Lock()
+
 
 # ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
 def save_upload(file_obj, dest_dir: Path) -> Path | None:
@@ -174,6 +182,117 @@ def download(job_id: str):
         return jsonify({"error": "파일 없음"}), 404
     return send_file(job["output"], as_attachment=True,
                      download_name="shorts_output.mp4")
+
+
+@app.route("/image-prompts")
+def image_prompts_page():
+    return render_template("image_prompts.html")
+
+
+@app.route("/image-prompts/generate", methods=["POST"])
+def image_prompts_generate():
+    zip_file = request.files.get("zip")
+    if not zip_file or not zip_file.filename:
+        return jsonify({"error": "압축파일(zip)을 업로드해주세요."}), 400
+
+    job_id = uuid.uuid4().hex[:10]
+    job_dir = PROMPT_DIR / job_id
+    job_dir.mkdir(parents=True)
+    zip_path = job_dir / "upload.zip"
+    zip_file.save(zip_path)
+
+    style          = request.form.get("style", "photo")
+    extra_keywords = request.form.get("extra_keywords", "")
+    aspect_ratio   = request.form.get("aspect_ratio", "1:1")
+
+    import prompt_gen
+    try:
+        items = prompt_gen.generate_prompts_from_zip(
+            str(zip_path), style=style,
+            extra_keywords=extra_keywords, aspect_ratio=aspect_ratio,
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    with PROMPT_JOBS_LOCK:
+        PROMPT_JOBS[job_id] = {
+            "job_id": job_id,
+            "items": items,
+            "style": style,
+            "extra_keywords": extra_keywords,
+            "aspect_ratio": aspect_ratio,
+        }
+
+    return jsonify({"job_id": job_id, "items": items})
+
+
+@app.route("/image-prompts/<job_id>/update", methods=["POST"])
+def image_prompts_update(job_id):
+    job = PROMPT_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "존재하지 않는 작업입니다."}), 404
+
+    data = request.get_json(force=True, silent=True) or {}
+    edited = {int(it["id"]): it.get("prompt", "") for it in data.get("items", []) if "id" in it}
+    with PROMPT_JOBS_LOCK:
+        for item in job["items"]:
+            if item["id"] in edited:
+                item["prompt"] = edited[item["id"]]
+
+    return jsonify({"ok": True})
+
+
+@app.route("/image-prompts/<job_id>/state")
+def image_prompts_state(job_id):
+    job = PROMPT_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "존재하지 않는 작업입니다."}), 404
+    return jsonify(job)
+
+
+# ─── 크롬 확장 프로그램용 API (CORS 허용) ──────────────────────────────────────
+@app.after_request
+def _add_cors_headers(resp):
+    if request.path.startswith("/api/"):
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+
+@app.route("/api/jobs/<job_id>/prompts")
+def api_job_prompts(job_id):
+    job = PROMPT_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "존재하지 않는 작업입니다."}), 404
+    return jsonify({
+        "job_id": job_id,
+        "items": [
+            {"id": it["id"], "name": it["name"], "prompt": it["prompt"], "status": it["status"]}
+            for it in job["items"]
+        ],
+    })
+
+
+@app.route("/api/jobs/<job_id>/report", methods=["POST"])
+def api_job_report(job_id):
+    job = PROMPT_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "존재하지 않는 작업입니다."}), 404
+
+    data = request.get_json(force=True, silent=True) or {}
+    item_id = data.get("id")
+    status  = data.get("status", "done")
+    message = data.get("message", "")
+
+    with PROMPT_JOBS_LOCK:
+        for item in job["items"]:
+            if item["id"] == item_id:
+                item["status"] = status
+                item["message"] = message
+                break
+
+    return jsonify({"ok": True})
 
 
 @app.route("/thumbnail/<job_id>")

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 프롬프트 생성 · Gemini 자동화</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  .header {
+    background: #fff;
+    border-bottom: 1px solid #e8e8e4;
+    padding: 20px 24px 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header p  { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.5; }
+  .header .nav { margin-top: 10px; }
+  .header .nav a {
+    font-size: 12px; color: #4a7cf6; text-decoration: none; font-weight: 600;
+  }
+
+  .main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+
+  .section-title {
+    font-size: 13px; font-weight: 600; color: #555;
+    margin: 24px 0 10px; letter-spacing: 0.2px;
+  }
+
+  .upload-card {
+    background: #fff;
+    border: 1.5px dashed #d4d4ce;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .18s, background .18s;
+    display: flex; align-items: center; gap: 14px;
+    position: relative;
+  }
+  .upload-card:hover { border-color: #999; background: #fafaf8; }
+  .upload-card.filled { border-color: #4a7cf6; border-style: solid; background: #f0f4ff; }
+  .upload-card input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: #f0f0ec; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 18px;
+  }
+  .upload-info { flex: 1; min-width: 0; }
+  .upload-info strong { font-size: 14px; font-weight: 600; display: block; }
+  .upload-info span   { font-size: 11px; color: #999; margin-top: 2px; display: block; }
+  .upload-filelist {
+    font-size: 11px; color: #4a7cf6; margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .settings-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+  }
+  .settings-card {
+    background: #fff; border: 1px solid #e8e8e4;
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .settings-card.full { grid-column: 1 / -1; }
+  .settings-card label {
+    font-size: 12px; color: #888; display: block; margin-bottom: 10px;
+  }
+  select, input[type=text] {
+    width: 100%; border: 1px solid #e0e0da; border-radius: 8px;
+    padding: 9px 12px; font-size: 13px; background: #fff; outline: none;
+  }
+  select {
+    appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  .generate-wrap { margin-top: 24px; }
+  .btn-generate {
+    width: 100%; padding: 16px;
+    background: #1a1a1a; color: #fff;
+    border: none; border-radius: 12px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s; letter-spacing: -0.3px;
+  }
+  .btn-generate:hover:not(:disabled) { opacity: .85; }
+  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+
+  .error-msg {
+    background: #fff0f0; border: 1px solid #ffcdd2;
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px; color: #c62828; margin-top: 14px;
+    display: none;
+  }
+
+  /* ── 연동 패널 ── */
+  .connect-wrap { display: none; }
+  .connect-card {
+    background: #f0f4ff; border: 1px solid #c7d7fd;
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 10px;
+  }
+  .connect-card h3 { font-size: 13px; margin-bottom: 8px; color: #3a5fc8; }
+  .connect-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .connect-row .field {
+    flex: 1; background: #fff; border: 1px solid #c7d7fd; border-radius: 8px;
+    padding: 8px 12px; font-size: 12px; font-family: monospace; color: #1a1a1a;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .connect-row button {
+    flex-shrink: 0; font-size: 12px; padding: 8px 14px;
+    border: none; border-radius: 8px; background: #4a7cf6; color: #fff;
+    cursor: pointer; font-weight: 600;
+  }
+  .connect-steps { font-size: 12px; color: #555; line-height: 1.9; padding-left: 4px; }
+  .connect-steps li { margin-left: 16px; }
+  .btn-open-gemini {
+    display: inline-block; margin-top: 10px; padding: 10px 20px;
+    background: #1a1a1a; color: #fff; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none;
+  }
+
+  /* ── 요약 진행 바 ── */
+  .summary-bar {
+    display: flex; gap: 8px; margin: 10px 0 16px; flex-wrap: wrap;
+  }
+  .summary-chip {
+    font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 20px;
+    background: #f0f0ec; color: #666;
+  }
+  .summary-chip.done    { background: #e6f7ec; color: #1e8e4a; }
+  .summary-chip.error   { background: #fff0f0; color: #c62828; }
+  .summary-chip.running { background: #f0f4ff; color: #3a5fc8; }
+
+  /* ── 프롬프트 카드 ── */
+  .prompt-list { display: flex; flex-direction: column; gap: 8px; }
+  .prompt-card {
+    background: #fff; border: 1px solid #e8e8e4; border-radius: 12px; padding: 12px 14px;
+  }
+  .prompt-card-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+  }
+  .prompt-card-title { font-size: 12px; font-weight: 700; color: #333; }
+  .prompt-card-file { font-size: 10px; color: #aaa; margin-left: 6px; font-weight: 400; }
+  .status-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+    background: #f0f0ec; color: #888;
+  }
+  .status-badge.pending    { background: #f0f0ec; color: #888; }
+  .status-badge.generating,
+  .status-badge.running    { background: #f0f4ff; color: #4a7cf6; }
+  .status-badge.done       { background: #e6f7ec; color: #1e8e4a; }
+  .status-badge.error      { background: #fff0f0; color: #c62828; }
+  .prompt-textarea {
+    width: 100%; border: 1px solid #e0e0da; border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; font-family: inherit;
+    resize: vertical; min-height: 54px; outline: none;
+  }
+  .prompt-textarea:focus { border-color: #4a7cf6; }
+  .prompt-msg { font-size: 10px; color: #c62828; margin-top: 4px; }
+
+  .save-hint { font-size: 11px; color: #aaa; text-align: right; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>이미지 프롬프트 생성 · Gemini 자동화</h1>
+  <p>압축파일(zip)을 업로드하면 이미지 생성 프롬프트를 자동으로 만들고, 크롬 확장 프로그램이 Gemini에서 이미지를 생성·다운로드합니다</p>
+  <div class="nav"><a href="/">← Shorts 제작 UI로 이동</a></div>
+</div>
+
+<div class="main">
+
+  <div class="section-title">압축파일 업로드</div>
+  <div class="upload-card" id="zipCard">
+    <input type="file" id="zipInput" accept=".zip">
+    <div class="upload-icon">🗜</div>
+    <div class="upload-info">
+      <strong>ZIP 파일</strong>
+      <span>이미지 파일 모음 또는 prompts.json / prompts.csv / prompts.txt 매니페스트 포함</span>
+      <div class="upload-filelist" id="zipList"></div>
+    </div>
+  </div>
+
+  <div class="section-title">프롬프트 설정</div>
+  <div class="settings-grid">
+    <div class="settings-card">
+      <label>스타일</label>
+      <select id="style">
+        <option value="photo" selected>포토리얼</option>
+        <option value="illustration">일러스트</option>
+        <option value="3d">3D 렌더링</option>
+        <option value="watercolor">수채화</option>
+        <option value="anime">애니메이션</option>
+        <option value="product">제품 스튜디오샷</option>
+      </select>
+    </div>
+    <div class="settings-card">
+      <label>비율</label>
+      <select id="aspectRatio">
+        <option value="1:1" selected>1:1 정사각형</option>
+        <option value="16:9">16:9 가로</option>
+        <option value="9:16">9:16 세로</option>
+        <option value="4:3">4:3</option>
+        <option value="3:4">3:4</option>
+        <option value="auto">자동</option>
+      </select>
+    </div>
+    <div class="settings-card full">
+      <label>추가 키워드 (선택)</label>
+      <input type="text" id="extraKeywords" placeholder="예: warm lighting, minimal background">
+    </div>
+  </div>
+
+  <div class="generate-wrap">
+    <button class="btn-generate" id="btnGenerate">프롬프트 생성</button>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- 확장 프로그램 연동 -->
+  <div class="connect-wrap" id="connectWrap">
+    <div class="section-title">크롬 확장 프로그램 연동</div>
+    <div class="connect-card">
+      <h3>🔌 아래 정보로 확장 프로그램과 연결하세요</h3>
+      <div class="connect-row">
+        <div class="field" id="serverUrlField"></div>
+        <button id="copyServerUrl">복사</button>
+      </div>
+      <div class="connect-row">
+        <div class="field" id="jobIdField"></div>
+        <button id="copyJobId">복사</button>
+      </div>
+      <ol class="connect-steps">
+        <li>chrome-extension 폴더를 크롬 확장 프로그램(개발자 모드 → 압축해제 로드)으로 설치하세요</li>
+        <li>확장 프로그램 아이콘을 클릭해 팝업을 열고, 위 서버 주소와 Job ID를 입력하세요</li>
+        <li>"불러오기" → "자동 생성 시작"을 누르면 Gemini 탭이 열리고 자동으로 진행됩니다</li>
+        <li>생성된 이미지는 다운로드 폴더의 namuai-gemini/{job id} 안에 자동 저장됩니다</li>
+      </ol>
+      <button class="btn-open-gemini" id="btnOpenGemini">Gemini 열기 ↗</button>
+    </div>
+
+    <div class="section-title">생성된 프롬프트 <span id="promptCount" style="color:#aaa;font-weight:400"></span></div>
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="prompt-list" id="promptList"></div>
+    <div class="save-hint" id="saveHint"></div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+let zipFile = null;
+let currentJobId = null;
+let pollTimer = null;
+let saveTimer = null;
+
+document.getElementById('zipInput').addEventListener('change', function () {
+  const f = this.files[0];
+  zipFile = f || null;
+  const card = document.getElementById('zipCard');
+  const list = document.getElementById('zipList');
+  list.textContent = f ? f.name : '';
+  card.classList.toggle('filled', !!f);
+});
+
+document.getElementById('btnGenerate').addEventListener('click', generatePrompts);
+
+async function generatePrompts() {
+  if (!zipFile) { showError('압축파일(zip)을 업로드해주세요.'); return; }
+  hideError();
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.textContent = '생성 중...';
+
+  const form = new FormData();
+  form.append('zip', zipFile);
+  form.append('style', document.getElementById('style').value);
+  form.append('aspect_ratio', document.getElementById('aspectRatio').value);
+  form.append('extra_keywords', document.getElementById('extraKeywords').value);
+
+  try {
+    const res = await fetch('/image-prompts/generate', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+
+    currentJobId = data.job_id;
+    document.getElementById('connectWrap').style.display = 'block';
+    document.getElementById('serverUrlField').textContent = window.location.origin;
+    document.getElementById('jobIdField').textContent = currentJobId;
+    document.getElementById('btnOpenGemini').onclick = () => window.open('https://gemini.google.com/app', '_blank');
+
+    renderPrompts(data.items);
+    startPolling();
+  } catch (e) {
+    showError('서버 연결 오류: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '프롬프트 생성';
+  }
+}
+
+function renderPrompts(items) {
+  document.getElementById('promptCount').textContent = `(${items.length}개)`;
+  const list = document.getElementById('promptList');
+  list.innerHTML = '';
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'prompt-card';
+    card.dataset.id = item.id;
+    card.innerHTML = `
+      <div class="prompt-card-head">
+        <div><span class="prompt-card-title">${escapeHtml(item.name)}</span>${item.source_filename ? `<span class="prompt-card-file">${escapeHtml(item.source_filename)}</span>` : ''}</div>
+        <span class="status-badge ${item.status}" data-status>${statusLabel(item.status)}</span>
+      </div>
+      <textarea class="prompt-textarea" data-prompt>${escapeHtml(item.prompt)}</textarea>
+      <div class="prompt-msg" data-msg style="display:none"></div>
+    `;
+    card.querySelector('[data-prompt]').addEventListener('input', scheduleSave);
+    list.appendChild(card);
+  });
+  updateSummary(items);
+}
+
+function scheduleSave() {
+  document.getElementById('saveHint').textContent = '저장 중...';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveEdits, 600);
+}
+
+async function saveEdits() {
+  if (!currentJobId) return;
+  const items = Array.from(document.querySelectorAll('.prompt-card')).map(card => ({
+    id: parseInt(card.dataset.id, 10),
+    prompt: card.querySelector('[data-prompt]').value,
+  }));
+  try {
+    await fetch(`/image-prompts/${currentJobId}/update`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    document.getElementById('saveHint').textContent = '저장됨';
+  } catch (e) {
+    document.getElementById('saveHint').textContent = '저장 실패';
+  }
+}
+
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(pollState, 2000);
+}
+
+async function pollState() {
+  if (!currentJobId) return;
+  try {
+    const res = await fetch(`/image-prompts/${currentJobId}/state`);
+    const data = await res.json();
+    if (data.error) return;
+    data.items.forEach(item => {
+      const card = document.querySelector(`.prompt-card[data-id="${item.id}"]`);
+      if (!card) return;
+      const badge = card.querySelector('[data-status]');
+      badge.className = 'status-badge ' + item.status;
+      badge.textContent = statusLabel(item.status);
+      const msgEl = card.querySelector('[data-msg]');
+      if (item.message) {
+        msgEl.textContent = item.message;
+        msgEl.style.display = item.status === 'error' ? 'block' : 'none';
+      }
+      // 진행 중인 프롬프트는 사용자가 편집 중이 아니면 서버 값으로 동기화하지 않음(편집 보존)
+    });
+    updateSummary(data.items);
+  } catch (e) { /* 네트워크 일시 오류는 무시하고 다음 폴링에서 재시도 */ }
+}
+
+function updateSummary(items) {
+  const counts = { pending: 0, generating: 0, running: 0, done: 0, error: 0 };
+  items.forEach(it => { counts[it.status] = (counts[it.status] || 0) + 1; });
+  const running = counts.generating + counts.running;
+  const bar = document.getElementById('summaryBar');
+  bar.innerHTML = `
+    <span class="summary-chip">대기 ${counts.pending}</span>
+    <span class="summary-chip running">진행 중 ${running}</span>
+    <span class="summary-chip done">완료 ${counts.done}</span>
+    <span class="summary-chip error">실패 ${counts.error}</span>
+  `;
+}
+
+function statusLabel(status) {
+  return { pending: '대기', generating: '생성 중', running: '생성 중', done: '완료', error: '실패' }[status] || status;
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s || '';
+  return div.innerHTML;
+}
+
+['copyServerUrl', 'copyJobId'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function () {
+    const fieldId = id === 'copyServerUrl' ? 'serverUrlField' : 'jobIdField';
+    const text = document.getElementById(fieldId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = this.textContent;
+      this.textContent = '복사됨';
+      setTimeout(() => { this.textContent = orig; }, 1200);
+    });
+  });
+});
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('errorMsg').style.display = 'none';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "namuai - Gemini 이미지 자동 생성",
+  "version": "1.0.0",
+  "description": "namuai에서 생성한 이미지 프롬프트를 불러와 Gemini에서 이미지를 자동 생성하고 다운로드합니다.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "namuai Gemini 자동화"
+  },
+  "permissions": ["downloads", "storage", "tabs"],
+  "host_permissions": [
+    "http://localhost:5000/*",
+    "http://127.0.0.1:5000/*",
+    "https://gemini.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
