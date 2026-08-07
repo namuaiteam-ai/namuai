@@ -16,8 +16,7 @@ Gemini 챗 화면에 이미지 프롬프트를 자동 입력하는 스크립트 
     python gemini_image_prompt_automation.py --prompt "테스트" --driver-manager webdriver-manager
 
     # 평소 쓰는 Chrome(이미 로그인된 구글 계정)에 그대로 연결
-    #   1) launch_chrome_debug.bat 실행 (기존 Chrome 창을 모두 닫고 디버깅 모드로 재실행)
-    #   2) 아래처럼 --attach 로 그 창에 붙어서 제어
+    # 디버그 모드로 열려있지 않으면 자동으로 Chrome 을 재시작해서(같은 프로필 유지) 붙는다.
     python gemini_image_prompt_automation.py --prompt "테스트" --attach
 
 필요 패키지:
@@ -32,6 +31,11 @@ Chrome/Chromedriver:
 """
 
 import argparse
+import http.client
+import os
+import platform
+import shutil
+import subprocess
 import sys
 import time
 import urllib.request
@@ -76,6 +80,66 @@ RESPONSE_IMAGE_SELECTORS = [
 ]
 
 
+def _debug_port_alive(port: int, timeout: float = 1.0) -> bool:
+    """해당 포트에 이미 디버그 모드 Chrome 이 응답하는지 확인."""
+    conn = None
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+        conn.request("GET", "/json/version")
+        return conn.getresponse().status == 200
+    except OSError:
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def _find_chrome_exe() -> str | None:
+    candidates = [
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Google" / "Chrome" / "Application" / "chrome.exe",
+        Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Google" / "Chrome" / "Application" / "chrome.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    return shutil.which("chrome") or shutil.which("chrome.exe") or shutil.which("google-chrome")
+
+
+def ensure_debug_chrome(port: int, wait_timeout: float = 20.0) -> None:
+    """평소 로그인된 Chrome 이 디버그 포트로 열려있지 않으면 자동으로 재시작해서 연다.
+
+    이미 그 포트로 떠 있으면 아무것도 하지 않는다(기존 창을 그대로 재사용).
+    없으면 Chrome 을 모두 종료한 뒤(경고: 열려있던 창/탭이 닫힘), 같은 기본 프로필로
+    --remote-debugging-port 옵션을 붙여 재실행한다 → 로그인 상태는 그대로 유지된다.
+    """
+    if _debug_port_alive(port):
+        return
+
+    chrome_exe = _find_chrome_exe()
+    if not chrome_exe:
+        raise RuntimeError(
+            "Chrome 실행 파일을 찾지 못했습니다. Chrome 이 설치되어 있는지 확인하세요."
+        )
+
+    if platform.system() == "Windows":
+        subprocess.run(["taskkill", "/IM", "chrome.exe", "/F"], capture_output=True)
+    else:
+        subprocess.run(["pkill", "-f", "Google Chrome"], capture_output=True)
+    time.sleep(2)
+
+    subprocess.Popen(
+        [chrome_exe, f"--remote-debugging-port={port}", "--profile-directory=Default"]
+    )
+
+    end_time = time.time() + wait_timeout
+    while time.time() < end_time:
+        if _debug_port_alive(port):
+            return
+        time.sleep(0.5)
+    raise RuntimeError("Chrome 디버그 모드 시작을 확인하지 못했습니다. 다시 시도해주세요.")
+
+
 def _build_chromedriver_service(driver_manager: str) -> Service | None:
     if driver_manager != "webdriver-manager":
         return None
@@ -102,11 +166,12 @@ def build_driver(
         "webdriver-manager" - webdriver-manager 패키지로 chromedriver 를 명시적으로 다운로드/캐싱.
 
     attach_debugger_port:
-        지정하면 새 프로필을 만들지 않고, 이미 --remote-debugging-port 로 실행 중인
-        Chrome(평소 로그인해서 쓰는 그 브라우저)에 그대로 연결한다.
-        (launch_chrome_debug.bat 로 미리 그 포트를 열어둔 Chrome 을 켜둬야 함)
+        지정하면 새 프로필을 만들지 않고, 평소 로그인해서 쓰는 그 Chrome 에 그대로 연결한다.
+        디버그 포트로 이미 열려 있으면 그대로 재사용하고, 아니면 자동으로 Chrome 을
+        재시작해서(같은 기본 프로필 유지) 그 포트를 연다.
     """
     if attach_debugger_port:
+        ensure_debug_chrome(attach_debugger_port)
         options = Options()
         options.add_experimental_option(
             "debuggerAddress", f"127.0.0.1:{attach_debugger_port}"
@@ -333,7 +398,7 @@ def main():
     parser.add_argument(
         "--attach",
         action="store_true",
-        help="새 프로필 대신, launch_chrome_debug.bat 로 미리 띄워둔 기존 로그인 Chrome 에 연결",
+        help="새 프로필 대신 평소 쓰는 로그인된 Chrome 에 연결 (필요하면 자동으로 디버그 모드로 재시작)",
     )
     parser.add_argument(
         "--debugger-port", type=int, default=9222,

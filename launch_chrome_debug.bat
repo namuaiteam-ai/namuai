@@ -1,4 +1,8 @@
 @echo off
+REM OPTIONAL / manual fallback: gemini_app.py and the --attach CLI flag now
+REM do this automatically, so you normally don't need to run this file
+REM yourself. Kept here for manual troubleshooting.
+REM
 REM Restarts Chrome with a remote debugging port so the Gemini automation
 REM script can attach to it and reuse your normal logged-in Google account.
 REM WARNING: this force-closes ALL open Chrome windows/tabs first. Save
