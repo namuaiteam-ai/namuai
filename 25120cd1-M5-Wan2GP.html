@@ -1054,7 +1054,7 @@ function checkReady() {
 // 곧 "세션 등록"이기도 해서, 이게 없으면 다른 방식(/call, /api)은 전부 거부당했습니다.
 // fn_index/파라미터 순서는 하드코딩하지 않고, 매 호출마다 /config 에서 실제 구성을 읽어와
 // 해당 함수의 입력 컴포넌트 기본값 위로 우리가 원하는 값(prompt/resolution/seed)만 덮어씁니다.
-const WAN = { configCache: null, sessionHash: null, prefix: null, queueStream: null, queueWaiters: [], componentValues: {} };
+const WAN = { configCache: null, sessionHash: null, prefix: null, queueStream: null, queueWaiters: [], componentValues: {}, lastGenKind: null };
 
 function wanSessionHash() {
   if (!WAN.sessionHash) WAN.sessionHash = 'nf' + Math.random().toString(36).slice(2, 12);
@@ -1526,6 +1526,7 @@ async function generateSceneImage(idx) {
   addLog(`S${idx+1} 씬 이미지 생성 요청 중... (Wan2GP, ${modelChoice}, ${resolution})`, 'info');
 
   try {
+    wanEnsureGenKind('image');
     const config = await wanGetConfig(url);
     const sessionHash = wanSessionHash();
     // load 이벤트를 다시 활성화. 예전엔 이게 model_type을 오염시킨다고 의심해서 껐었는데,
@@ -1736,6 +1737,18 @@ function wanResetSession() {
   WAN.prefix = null;
 }
 
+// 세션 리셋을 매번 하면(과거 방식) WebUI 대비 느려지는 문제가 있었고, 그렇다고 아예 안 하면
+// 이미지 생성 직후 영상 생성(또는 그 반대)으로 전환할 때 서버 쪽에 이전 모드(예: video tab)
+// 상태가 남아서 "생성 결과에서 이미지/영상을 찾지 못함" 오류로 이어짐(실제로 확인된 문제).
+// 그래서 "직전 생성 종류가 바뀔 때만" 세션을 리셋 - 같은 종류를 연달아 생성할 땐 세션/모델을
+// 그대로 재사용해 빠르게 유지하고, image<->video 전환 시에만 깨끗하게 새로 시작.
+function wanEnsureGenKind(kind) {
+  if (WAN.lastGenKind !== null && WAN.lastGenKind !== kind) {
+    wanResetSession();
+  }
+  WAN.lastGenKind = kind;
+}
+
 // 이미지 생성과 같은 process_prompt_and_add_tasks 파이프라인을 재사용하되,
 // 1) 소스 이미지를 먼저 업로드해서 I2V "Start Image" 입력 슬롯에 주입하고
 // 2) 프롬프트는 imagePrompts 대신 videoPrompts를 사용하고
@@ -1764,6 +1777,9 @@ async function generateSceneVideo(idx) {
     // image_prompt_type/gallery 값 등 파라미터 문제였던 것으로 확인됨. 매번 새 세션을 강제하면
     // Wan2GP가 매번 새 클라이언트로 취급해 모델을 다시 로드/초기화하는 오버헤드가 생겨
     // WebUI보다 느려지는 원인이 된 것으로 보임 - 세션을 재사용하도록 되돌림.
+    // 다만 이미지<->영상처럼 생성 종류가 바뀔 때는 이전 모드 상태가 남아 결과를 못 찾는 문제가
+    // 있어서, wanEnsureGenKind가 종류 전환 시에만 세션을 리셋해줌.
+    wanEnsureGenKind('video');
     const config = await wanGetConfig(url, true);
     const sessionHash = wanSessionHash();
     await wanTriggerLoadEvents(url, config, sessionHash);
