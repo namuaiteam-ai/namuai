@@ -1,1 +1,4 @@
 selenium>=4.6
+
+# 선택 설치: --driver-manager webdriver-manager 옵션을 쓸 경우에만 필요
+webdriver-manager

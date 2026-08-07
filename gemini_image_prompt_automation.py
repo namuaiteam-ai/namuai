@@ -11,12 +11,19 @@ Gemini 챗 화면에 이미지 프롬프트를 자동 입력하는 스크립트 
     python gemini_image_prompt_automation.py --prompts-file prompts.txt --download-dir output/gemini_images
     python gemini_image_prompt_automation.py --prompts-file prompts.txt --headless
 
+    # chromedriver 를 가져오는 방식 비교 테스트
+    python gemini_image_prompt_automation.py --prompt "테스트" --driver-manager auto
+    python gemini_image_prompt_automation.py --prompt "테스트" --driver-manager webdriver-manager
+
 필요 패키지:
-    pip install selenium
+    pip install selenium                    # --driver-manager auto (기본값)
+    pip install selenium webdriver-manager  # --driver-manager webdriver-manager
 
 Chrome/Chromedriver:
-    Selenium 4.6+ 는 Selenium Manager 가 내장되어 있어 별도 chromedriver 설치 없이
-    시스템에 설치된 Chrome 버전에 맞는 드라이버를 자동으로 내려받는다.
+    - auto: Selenium 4.6+ 내장 Selenium Manager 가 Chrome 버전에 맞는 드라이버를
+      자동으로 찾아 내려받는다. 별도 패키지 불필요.
+    - webdriver-manager: 서드파티 webdriver-manager 패키지가 드라이버 다운로드/캐싱을
+      명시적으로 관리한다. 사내망/프록시 등 Selenium Manager 가 실패하는 환경에서 대안으로 사용.
 """
 
 import argparse
@@ -32,6 +39,7 @@ from selenium.common.exceptions import (
     TimeoutException,
 )
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -64,8 +72,13 @@ RESPONSE_IMAGE_SELECTORS = [
 ]
 
 
-def build_driver(profile_dir: str, headless: bool) -> webdriver.Chrome:
-    """영구 프로필을 사용하는 Chrome 드라이버 생성 (로그인 세션 유지)."""
+def build_driver(profile_dir: str, headless: bool, driver_manager: str = "auto") -> webdriver.Chrome:
+    """영구 프로필을 사용하는 Chrome 드라이버 생성 (로그인 세션 유지).
+
+    driver_manager:
+        "auto"             - Selenium 4.6+ 내장 Selenium Manager 가 chromedriver 를 자동 해결.
+        "webdriver-manager" - webdriver-manager 패키지로 chromedriver 를 명시적으로 다운로드/캐싱.
+    """
     options = Options()
     options.add_argument(f"--user-data-dir={Path(profile_dir).resolve()}")
     options.add_argument("--profile-directory=Default")
@@ -79,7 +92,19 @@ def build_driver(profile_dir: str, headless: bool) -> webdriver.Chrome:
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
-    driver = webdriver.Chrome(options=options)
+    if driver_manager == "webdriver-manager":
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+        except ImportError as exc:
+            raise SystemExit(
+                "webdriver-manager 가 설치되어 있지 않습니다. "
+                "pip install webdriver-manager 로 설치하세요."
+            ) from exc
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+    else:
+        driver = webdriver.Chrome(options=options)
+
     driver.execute_cdp_cmd(
         "Page.addScriptToEvaluateOnNewDocument",
         {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
@@ -184,6 +209,12 @@ def main():
     )
     parser.add_argument("--headless", action="store_true", help="헤드리스 모드로 실행")
     parser.add_argument(
+        "--driver-manager",
+        choices=["auto", "webdriver-manager"],
+        default="auto",
+        help="chromedriver 확보 방식: auto=Selenium Manager(기본), webdriver-manager=webdriver-manager 패키지",
+    )
+    parser.add_argument(
         "--download-dir",
         help="생성된 이미지를 저장할 디렉터리 (지정하지 않으면 다운로드하지 않음)",
     )
@@ -196,7 +227,7 @@ def main():
     args = parser.parse_args()
 
     prompts = load_prompts(args)
-    driver = build_driver(args.profile_dir, args.headless)
+    driver = build_driver(args.profile_dir, args.headless, driver_manager=args.driver_manager)
 
     try:
         driver.get(GEMINI_URL)
