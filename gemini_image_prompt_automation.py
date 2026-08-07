@@ -15,6 +15,11 @@ Gemini 챗 화면에 이미지 프롬프트를 자동 입력하는 스크립트 
     python gemini_image_prompt_automation.py --prompt "테스트" --driver-manager auto
     python gemini_image_prompt_automation.py --prompt "테스트" --driver-manager webdriver-manager
 
+    # 평소 쓰는 Chrome(이미 로그인된 구글 계정)에 그대로 연결
+    #   1) launch_chrome_debug.bat 실행 (기존 Chrome 창을 모두 닫고 디버깅 모드로 재실행)
+    #   2) 아래처럼 --attach 로 그 창에 붙어서 제어
+    python gemini_image_prompt_automation.py --prompt "테스트" --attach
+
 필요 패키지:
     pip install selenium                    # --driver-manager auto (기본값)
     pip install selenium webdriver-manager  # --driver-manager webdriver-manager
@@ -71,13 +76,45 @@ RESPONSE_IMAGE_SELECTORS = [
 ]
 
 
-def build_driver(profile_dir: str, headless: bool, driver_manager: str = "auto") -> webdriver.Chrome:
-    """영구 프로필을 사용하는 Chrome 드라이버 생성 (로그인 세션 유지).
+def _build_chromedriver_service(driver_manager: str) -> Service | None:
+    if driver_manager != "webdriver-manager":
+        return None
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+    except ImportError as exc:
+        raise SystemExit(
+            "webdriver-manager 가 설치되어 있지 않습니다. "
+            "pip install webdriver-manager 로 설치하세요."
+        ) from exc
+    return Service(ChromeDriverManager().install())
+
+
+def build_driver(
+    profile_dir: str,
+    headless: bool,
+    driver_manager: str = "auto",
+    attach_debugger_port: int | None = None,
+) -> webdriver.Chrome:
+    """Chrome 드라이버를 생성한다.
 
     driver_manager:
         "auto"             - Selenium 4.6+ 내장 Selenium Manager 가 chromedriver 를 자동 해결.
         "webdriver-manager" - webdriver-manager 패키지로 chromedriver 를 명시적으로 다운로드/캐싱.
+
+    attach_debugger_port:
+        지정하면 새 프로필을 만들지 않고, 이미 --remote-debugging-port 로 실행 중인
+        Chrome(평소 로그인해서 쓰는 그 브라우저)에 그대로 연결한다.
+        (launch_chrome_debug.bat 로 미리 그 포트를 열어둔 Chrome 을 켜둬야 함)
     """
+    if attach_debugger_port:
+        options = Options()
+        options.add_experimental_option(
+            "debuggerAddress", f"127.0.0.1:{attach_debugger_port}"
+        )
+        service = _build_chromedriver_service(driver_manager)
+        driver = webdriver.Chrome(service=service, options=options) if service else webdriver.Chrome(options=options)
+        return driver
+
     options = Options()
     options.add_argument(f"--user-data-dir={Path(profile_dir).resolve()}")
     options.add_argument("--profile-directory=Default")
@@ -91,18 +128,8 @@ def build_driver(profile_dir: str, headless: bool, driver_manager: str = "auto")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
-    if driver_manager == "webdriver-manager":
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-        except ImportError as exc:
-            raise SystemExit(
-                "webdriver-manager 가 설치되어 있지 않습니다. "
-                "pip install webdriver-manager 로 설치하세요."
-            ) from exc
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-    else:
-        driver = webdriver.Chrome(options=options)
+    service = _build_chromedriver_service(driver_manager)
+    driver = webdriver.Chrome(service=service, options=options) if service else webdriver.Chrome(options=options)
 
     driver.execute_cdp_cmd(
         "Page.addScriptToEvaluateOnNewDocument",
@@ -208,6 +235,7 @@ def run_prompts(
     progress_cb=None,
     should_stop=None,
     keep_open: bool = False,
+    attach_debugger_port: int | None = None,
 ) -> list[dict]:
     """프롬프트 목록을 순서대로 Gemini 에 전송하고 결과를 반환한다.
 
@@ -216,6 +244,8 @@ def run_prompts(
     progress_cb(step, total, message) - 진행 상황 콜백 (선택)
     should_stop() -> bool             - True 를 반환하면 다음 프롬프트 전에 중단 (선택)
     keep_open                         - True 면 처리 후 브라우저를 닫지 않고 대기 (CLI 수동 확인용)
+    attach_debugger_port              - 지정하면 새 프로필 대신 이미 열려 있는(로그인된) Chrome 에 연결.
+                                         이 경우 사용자의 실제 브라우저이므로 작업 종료 후 닫지 않는다.
 
     반환: [{"prompt": str, "images": [str, ...]}, ...]
     """
@@ -226,9 +256,15 @@ def run_prompts(
             progress_cb(step, total, message)
 
     results = []
-    driver = build_driver(profile_dir, headless, driver_manager=driver_manager)
+    driver = build_driver(
+        profile_dir, headless, driver_manager=driver_manager,
+        attach_debugger_port=attach_debugger_port,
+    )
     try:
         report(0, len(prompts), "Gemini 접속 중...")
+        if attach_debugger_port:
+            # 기존 탭을 건드리지 않도록 새 탭을 열어서 사용한다.
+            driver.switch_to.new_window("tab")
         driver.get(GEMINI_URL)
         wait_for_chat_ready(driver)
 
@@ -256,9 +292,14 @@ def run_prompts(
 
         report(len(prompts), len(prompts), "모든 프롬프트 처리 완료.")
     finally:
-        if keep_open:
-            input("종료하려면 Enter 를 누르세요 (브라우저를 닫습니다)...")
-        driver.quit()
+        if attach_debugger_port:
+            # 연결만 한 것이므로 quit() 을 호출하지 않는다.
+            # (attach 세션에서 quit() 을 부르면 사용자의 실제 Chrome 자체가 종료됨)
+            pass
+        else:
+            if keep_open:
+                input("종료하려면 Enter 를 누르세요 (브라우저를 닫습니다)...")
+            driver.quit()
 
     return results
 
@@ -289,6 +330,15 @@ def main():
     parser.add_argument(
         "--response-timeout", type=float, default=180.0, help="응답 생성 최대 대기 시간(초)"
     )
+    parser.add_argument(
+        "--attach",
+        action="store_true",
+        help="새 프로필 대신, launch_chrome_debug.bat 로 미리 띄워둔 기존 로그인 Chrome 에 연결",
+    )
+    parser.add_argument(
+        "--debugger-port", type=int, default=9222,
+        help="--attach 사용 시 연결할 Chrome 원격 디버깅 포트 (기본 9222)",
+    )
     args = parser.parse_args()
 
     prompts = load_prompts(args)
@@ -301,6 +351,7 @@ def main():
         delay=args.delay,
         response_timeout=args.response_timeout,
         keep_open=not args.headless,
+        attach_debugger_port=args.debugger_port if args.attach else None,
     )
 
 

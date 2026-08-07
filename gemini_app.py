@@ -66,6 +66,7 @@ def _run_job(job_id: str, prompts: list, opts: dict):
             response_timeout=opts["response_timeout"],
             progress_cb=_progress_cb(job_id),
             should_stop=_should_stop(job_id),
+            attach_debugger_port=opts["attach_debugger_port"],
         )
         total_images = sum(len(r["images"]) for r in results)
         _update_job(
@@ -104,12 +105,16 @@ def start():
         return jsonify({"error": "프롬프트를 1개 이상 입력하거나 파일을 업로드해주세요."}), 400
 
     form = request.form
+    connection_mode = form.get("connection_mode", "profile")
     opts = {
         "profile_dir": form.get("profile_dir", "gemini_chrome_profile") or "gemini_chrome_profile",
-        "headless": form.get("headless") == "on",
+        "headless": form.get("headless") == "on" and connection_mode != "attach",
         "driver_manager": form.get("driver_manager", "auto"),
         "delay": float(form.get("delay", 5.0)),
         "response_timeout": float(form.get("response_timeout", 180.0)),
+        "attach_debugger_port": (
+            int(form.get("debugger_port", 9222)) if connection_mode == "attach" else None
+        ),
     }
 
     job_id = uuid.uuid4().hex[:10]
