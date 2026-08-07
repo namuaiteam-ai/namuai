@@ -42,7 +42,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 GEMINI_URL = "https://gemini.google.com/app"
@@ -198,6 +197,72 @@ def load_prompts(args) -> list[str]:
     raise SystemExit("--prompt 또는 --prompts-file 중 하나는 반드시 지정해야 합니다.")
 
 
+def run_prompts(
+    prompts: list[str],
+    profile_dir: str,
+    headless: bool = False,
+    driver_manager: str = "auto",
+    download_dir: str | None = None,
+    delay: float = 5.0,
+    response_timeout: float = 180.0,
+    progress_cb=None,
+    should_stop=None,
+    keep_open: bool = False,
+) -> list[dict]:
+    """프롬프트 목록을 순서대로 Gemini 에 전송하고 결과를 반환한다.
+
+    UI(웹/데스크톱)나 다른 스크립트에서 재사용할 수 있도록 CLI 로직을 함수로 분리.
+
+    progress_cb(step, total, message) - 진행 상황 콜백 (선택)
+    should_stop() -> bool             - True 를 반환하면 다음 프롬프트 전에 중단 (선택)
+    keep_open                         - True 면 처리 후 브라우저를 닫지 않고 대기 (CLI 수동 확인용)
+
+    반환: [{"prompt": str, "images": [str, ...]}, ...]
+    """
+
+    def report(step, total, message):
+        print(message)
+        if progress_cb:
+            progress_cb(step, total, message)
+
+    results = []
+    driver = build_driver(profile_dir, headless, driver_manager=driver_manager)
+    try:
+        report(0, len(prompts), "Gemini 접속 중...")
+        driver.get(GEMINI_URL)
+        wait_for_chat_ready(driver)
+
+        for idx, prompt in enumerate(prompts, start=1):
+            if should_stop and should_stop():
+                report(idx - 1, len(prompts), "사용자 요청으로 중단됨.")
+                break
+
+            report(idx - 1, len(prompts), f"[{idx}/{len(prompts)}] 프롬프트 전송: {prompt}")
+            send_prompt(driver, prompt)
+            wait_for_response(driver, timeout=response_timeout)
+
+            images: list[str] = []
+            if download_dir:
+                saved = download_latest_images(
+                    driver, Path(download_dir), prefix=f"prompt_{idx:03d}"
+                )
+                images = [str(p) for p in saved]
+
+            results.append({"prompt": prompt, "images": images})
+            report(idx, len(prompts), f"[{idx}/{len(prompts)}] 완료")
+
+            if idx < len(prompts):
+                time.sleep(delay)
+
+        report(len(prompts), len(prompts), "모든 프롬프트 처리 완료.")
+    finally:
+        if keep_open:
+            input("종료하려면 Enter 를 누르세요 (브라우저를 닫습니다)...")
+        driver.quit()
+
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description="Gemini 챗창에 이미지 프롬프트 자동 입력")
     parser.add_argument("--prompt", help="단일 프롬프트 텍스트")
@@ -227,30 +292,16 @@ def main():
     args = parser.parse_args()
 
     prompts = load_prompts(args)
-    driver = build_driver(args.profile_dir, args.headless, driver_manager=args.driver_manager)
-
-    try:
-        driver.get(GEMINI_URL)
-        wait_for_chat_ready(driver)
-
-        for idx, prompt in enumerate(prompts, start=1):
-            print(f"[{idx}/{len(prompts)}] 프롬프트 전송: {prompt}")
-            send_prompt(driver, prompt)
-            wait_for_response(driver, timeout=args.response_timeout)
-
-            if args.download_dir:
-                download_latest_images(
-                    driver, Path(args.download_dir), prefix=f"prompt_{idx:03d}"
-                )
-
-            if idx < len(prompts):
-                time.sleep(args.delay)
-
-        print("모든 프롬프트 처리 완료.")
-    finally:
-        if not args.headless:
-            input("종료하려면 Enter 를 누르세요 (브라우저를 닫습니다)...")
-        driver.quit()
+    run_prompts(
+        prompts,
+        profile_dir=args.profile_dir,
+        headless=args.headless,
+        driver_manager=args.driver_manager,
+        download_dir=args.download_dir,
+        delay=args.delay,
+        response_timeout=args.response_timeout,
+        keep_open=not args.headless,
+    )
 
 
 if __name__ == "__main__":
