@@ -1968,15 +1968,19 @@ async function generateSceneVideo(idx) {
           addLog(`current_gallery_tab을 "${videoChoice}"(으)로 강제 전환`, 'info');
           addData[gtIdx] = videoChoice;
         }
-      } else if (gtComp && gtComp.type === 'number') {
-        // choices가 없는 number 타입 = Wan2GP 화면 상단 4개 탭(텍스트 프롬프트=0 / 이미지부터
-        // 시작하세요=1 / 동영상 계속 보기=2 / 이전 영상 계속 보기=3)의 인덱스로 추정됨. 지금까지
-        // 계속 0(텍스트 프롬프트)으로 남아있어서, gallery에 시작 이미지를 넣어도 실제로는 T2V
-        // 모드로 생성되고 있었을 가능성이 높음. "이미지부터 시작하세요"에 해당하는 1로 강제 설정.
+      } else if (gtComp && gtComp.type === 'number' && typeof addData[gtIdx] === 'number') {
+        // choices가 없는 number 타입이고 값도 실제 숫자일 때만(예: 0) Wan2GP 화면 상단 4개 탭
+        // (텍스트 프롬프트=0 / 이미지부터 시작하세요=1 / ...) 인덱스로 보고 1로 강제.
+        // 최근 로그에서 이 필드 값이 숫자가 아니라 "ltx2_19B"(모델 이름) 문자열로 나온 경우가
+        // 확인됐는데, 그때 1(숫자)로 강제 덮어쓰면 타입이 안 맞아 곧바로 생성 실패로 이어짐.
+        // 그래서 이미 숫자 타입일 때만 건드리고, 문자열 등 다른 값일 땐 그대로 둠(건드리지 않아도
+        // image_prompt_type="S" 설정만으로 이미지 참조가 되는 게 확인됨).
         if (addData[gtIdx] !== 1) {
           addLog(`current_gallery_tab(숫자, 탭 인덱스로 추정)을 0(텍스트 프롬프트)에서 1(이미지부터 시작하세요)로 강제 전환`, 'ok');
           addData[gtIdx] = 1;
         }
+      } else {
+        addLog(`current_gallery_tab 값이 숫자가 아니라서(타입 불일치 방지) 건드리지 않고 그대로 둠`, 'info');
       }
     }
 
