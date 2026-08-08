@@ -80,7 +80,6 @@ def generate():
     job_dir = UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
 
-    # 이미지 (최대 6장)
     images = []
     for i in range(6):
         p = save_upload(request.files.get(f"image_{i}"), job_dir)
@@ -181,7 +180,6 @@ def download(job_id: str):
 def thumbnail(job_id: str):
     thumb = UPLOAD_DIR / job_id / "thumb.jpg"
     if not thumb.exists():
-        # 영상에서 썸네일 추출
         output = UPLOAD_DIR / job_id / "output.mp4"
         if not output.exists():
             return jsonify({"error": "없음"}), 404

@@ -3,544 +3,895 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Shorts 영상 생성 에이전트</title>
+<title>Namu AI · 영상 생성</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── 리셋 & 기본 ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f5f5f0;
-    color: #1a1a1a;
-    min-height: 100vh;
-    padding: 0 0 60px;
-  }
+:root {
+  --bg: #0d0d0f;
+  --surface: #18181c;
+  --surface2: #1f1f25;
+  --border: rgba(255,255,255,.08);
+  --border-focus: rgba(99,102,241,.6);
+  --accent: #6366f1;
+  --accent-soft: rgba(99,102,241,.15);
+  --accent-glow: rgba(99,102,241,.35);
+  --green: #22c55e;
+  --green-soft: rgba(34,197,94,.15);
+  --red: #ef4444;
+  --text: #f1f1f3;
+  --text-2: #a1a1aa;
+  --text-3: #52525b;
+  --radius: 14px;
+  --radius-sm: 8px;
+}
 
-  /* ── 헤더 ── */
-  .header {
-    background: #fff;
-    border-bottom: 1px solid #e8e8e4;
-    padding: 20px 24px 16px;
-    position: sticky; top: 0; z-index: 100;
-  }
-  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-  .header p  { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.5; }
+html { scroll-behavior: smooth; }
 
-  /* ── 본문 ── */
-  .main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 80px;
+  line-height: 1.5;
+}
 
-  /* ── 섹션 제목 ── */
-  .section-title {
-    font-size: 13px; font-weight: 600; color: #555;
-    margin: 24px 0 10px; letter-spacing: 0.2px;
-  }
+/* ── 헤더 ─────────────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(13,13,15,.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-brand {
+  display: flex; align-items: center; gap: 10px;
+}
+.header-logo {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #fff;
+  letter-spacing: -1px;
+}
+.header h1 {
+  font-size: 15px; font-weight: 700; letter-spacing: -0.3px; color: var(--text);
+}
+.header-sub {
+  font-size: 11px; color: var(--text-3);
+}
 
-  /* ── 업로드 카드 ── */
-  .upload-card {
-    background: #fff;
-    border: 1.5px dashed #d4d4ce;
-    border-radius: 12px;
-    padding: 16px 18px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: border-color .18s, background .18s;
-    display: flex; align-items: center; gap: 14px;
-    position: relative;
-  }
-  .upload-card:hover { border-color: #999; background: #fafaf8; }
-  .upload-card.filled { border-color: #4a7cf6; border-style: solid; background: #f0f4ff; }
-  .upload-card input[type=file] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-  }
-  .upload-icon {
-    width: 36px; height: 36px; border-radius: 8px;
-    background: #f0f0ec; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; font-size: 18px;
-  }
-  .upload-info { flex: 1; min-width: 0; }
-  .upload-info strong { font-size: 14px; font-weight: 600; display: block; }
-  .upload-info span   { font-size: 11px; color: #999; margin-top: 2px; display: block; }
-  .upload-badge {
-    font-size: 11px; background: #4a7cf6; color: #fff;
-    padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
-  }
-  .upload-filelist {
-    font-size: 11px; color: #4a7cf6; margin-top: 3px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
+/* ── 본문 ─────────────────────────────────────────────────────── */
+.main {
+  max-width: 760px; margin: 0 auto; padding: 32px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
 
-  /* ── 슬라이더 그리드 ── */
-  .settings-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
-  }
-  .settings-card {
-    background: #fff; border: 1px solid #e8e8e4;
-    border-radius: 12px; padding: 16px 18px;
-  }
-  .settings-card label {
-    font-size: 12px; color: #888; display: block; margin-bottom: 10px;
-  }
-  .slider-row { display: flex; align-items: center; gap: 10px; }
-  input[type=range] {
-    flex: 1; -webkit-appearance: none; height: 4px;
-    background: #e0e0da; border-radius: 2px; outline: none; cursor: pointer;
-  }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 16px; height: 16px;
-    border-radius: 50%; background: #1a1a1a; cursor: pointer;
-  }
-  .slider-value {
-    font-size: 13px; font-weight: 600; min-width: 36px; text-align: right;
-  }
-  select {
-    width: 100%; border: 1px solid #e0e0da; border-radius: 8px;
-    padding: 9px 12px; font-size: 13px; background: #fff;
-    appearance: none; cursor: pointer; outline: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 12px center;
-    padding-right: 32px;
-  }
-  .select-hint { font-size: 11px; color: #aaa; margin-top: 5px; text-align: right; }
+/* ── 섹션 헤더 ───────────────────────────────────────────────── */
+.section-header {
+  display: flex; align-items: center; gap: 10px;
+  margin: 28px 0 12px;
+}
+.section-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.section-header h2 {
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  letter-spacing: 0.3px; text-transform: uppercase;
+}
 
-  /* ── 효과 버튼 그리드 ── */
-  .effect-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-    margin-bottom: 10px;
-  }
-  .effect-btn {
-    background: #fff; border: 1.5px solid #e0e0da;
-    border-radius: 10px; padding: 14px 8px 12px;
-    cursor: pointer; text-align: center;
-    transition: all .15s; user-select: none;
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
-  }
-  .effect-btn:hover { border-color: #bbb; background: #fafaf8; }
-  .effect-btn.active {
-    border-color: #4a7cf6; background: #f0f4ff; color: #4a7cf6;
-  }
-  .effect-btn .icon { font-size: 20px; line-height: 1; }
-  .effect-btn .label { font-size: 12px; font-weight: 500; }
+/* ── 이미지 업로드 슬롯 그리드 ──────────────────────────────── */
+.img-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+@media (max-width: 500px) {
+  .img-slot-grid { grid-template-columns: repeat(3, 1fr); }
+}
 
-  /* ── 자막 스타일 ── */
-  .subtitle-preview {
-    background: #111; border-radius: 12px 12px 0 0;
-    padding: 20px 18px; min-height: 64px;
-    display: flex; align-items: center; justify-content: center;
-    overflow: hidden; position: relative;
-  }
-  .subtitle-text {
-    color: #fff; font-size: 17px; font-weight: 700;
-    text-shadow: 0 1px 4px rgba(0,0,0,.8);
-    white-space: nowrap;
-  }
-  .subtitle-text.scroll { animation: marquee 6s linear infinite; }
-  .subtitle-text.fade   { animation: fadeInOut 3s ease-in-out infinite; }
-  .subtitle-text.static { animation: none; }
-  @keyframes marquee    { from { transform: translateX(120%); } to { transform: translateX(-120%); } }
-  @keyframes fadeInOut  { 0%,100%{opacity:0;} 20%,80%{opacity:1;} }
+.img-slot {
+  aspect-ratio: 9/16;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--border);
+  background: var(--surface);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, background .2s, transform .15s;
+}
+.img-slot:hover { border-color: var(--accent); background: var(--accent-soft); }
+.img-slot.has-img { border-style: solid; border-color: var(--accent); }
+.img-slot.drag-over { border-color: var(--green); background: var(--green-soft); transform: scale(1.03); }
 
-  .subtitle-controls {
-    background: #fff; border: 1px solid #e8e8e4;
-    border-radius: 0 0 12px 12px; padding: 12px;
-    display: flex; gap: 8px; flex-wrap: wrap;
-  }
-  .sub-btn {
-    font-size: 12px; padding: 6px 14px;
-    border: 1.5px solid #e0e0da; border-radius: 20px;
-    background: #fff; cursor: pointer; transition: all .15s;
-  }
-  .sub-btn:hover { border-color: #bbb; }
-  .sub-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
+.img-slot input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2;
+}
+.img-slot img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  border-radius: 6px; z-index: 1;
+}
+.img-slot-num {
+  font-size: 11px; font-weight: 700; color: var(--text-3);
+}
+.img-slot-icon { font-size: 16px; opacity: .4; }
+.img-slot-del {
+  position: absolute; top: 4px; right: 4px; z-index: 3;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(0,0,0,.7); color: #fff;
+  border: none; cursor: pointer; font-size: 10px;
+  display: none; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.img-slot.has-img .img-slot-del { display: flex; }
+.img-slot-del:hover { background: var(--red); }
 
-  /* ── 오디오 동기화 뱃지 ── */
-  .sync-badge {
-    font-size: 10px; font-weight: 600;
-    background: #e8f0fe; color: #4a7cf6;
-    padding: 2px 7px; border-radius: 10px;
-    margin-left: 6px; vertical-align: middle;
-  }
-  .sync-info {
-    background: #f0f4ff; border: 1px solid #c7d7fd;
-    border-radius: 10px; padding: 10px 14px;
-    font-size: 12px; color: #3a5fc8; margin-top: 10px;
-    display: none;
-  }
-  .sync-info strong { font-weight: 700; }
+/* ── 파일 카드 ───────────────────────────────────────────────── */
+.file-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+@media (max-width: 480px) { .file-row { grid-template-columns: 1fr; } }
 
-  /* ── 이미지 미리보기 그리드 ── */
-  .img-preview-grid {
-    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
-  }
-  .img-thumb {
-    width: 64px; height: 64px; object-fit: cover;
-    border-radius: 8px; border: 1px solid #e0e0da;
-  }
-  .img-thumb-del {
-    position: relative; display: inline-block;
-  }
-  .img-thumb-del button {
-    position: absolute; top: -4px; right: -4px;
-    width: 18px; height: 18px; border-radius: 50%;
-    background: #ff4444; color: #fff; border: none;
-    font-size: 10px; cursor: pointer; line-height: 18px; text-align: center;
-    padding: 0;
-  }
+.file-card {
+  background: var(--surface);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  display: flex; align-items: center; gap: 14px;
+  position: relative; overflow: hidden;
+}
+.file-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--accent-soft);
+  opacity: 0; transition: opacity .2s;
+}
+.file-card:hover { border-color: var(--accent); }
+.file-card:hover::before { opacity: 1; }
+.file-card.filled { border-style: solid; border-color: var(--accent); }
+.file-card.filled::before { opacity: 1; }
+.file-card input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2;
+}
+.file-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0; position: relative; z-index: 1;
+  transition: transform .2s;
+}
+.file-card:hover .file-icon { transform: scale(1.08); }
+.file-info { flex: 1; min-width: 0; position: relative; z-index: 1; }
+.file-info strong {
+  font-size: 13px; font-weight: 600; display: block; color: var(--text);
+}
+.file-info span {
+  font-size: 11px; color: var(--text-3); margin-top: 2px; display: block;
+}
+.file-name {
+  font-size: 11px; color: var(--accent);
+  margin-top: 4px; display: block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-badge {
+  font-size: 10px; font-weight: 600;
+  background: var(--accent); color: #fff;
+  padding: 2px 8px; border-radius: 20px;
+  position: absolute; top: 12px; right: 12px; z-index: 1;
+}
 
-  /* ── 자막 폰트/색상 설정 ── */
-  .sub-style-row {
-    display: flex; gap: 10px; align-items: center;
-    margin-top: 10px; flex-wrap: wrap;
-  }
-  .sub-style-row label { font-size: 12px; color: #888; }
-  .sub-style-row select { width: auto; flex: 1; min-width: 120px; }
-  .sub-style-row input[type=color] {
-    width: 36px; height: 28px; border: 1px solid #e0e0da;
-    border-radius: 6px; cursor: pointer; padding: 2px;
-  }
+/* ── 동기화 배너 ─────────────────────────────────────────────── */
+.sync-banner {
+  background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(99,102,241,.04));
+  border: 1px solid rgba(99,102,241,.3);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 12px; color: #a5b4fc;
+  display: none; align-items: center; gap: 8px;
+}
+.sync-banner strong { color: #c7d2fe; font-weight: 600; }
+.sync-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .6; transform: scale(1.3); }
+}
 
-  /* ── 생성 버튼 ── */
-  .generate-wrap { margin-top: 24px; }
-  .btn-generate {
-    width: 100%; padding: 16px;
-    background: #1a1a1a; color: #fff;
-    border: none; border-radius: 12px;
-    font-size: 16px; font-weight: 700; cursor: pointer;
-    transition: opacity .15s; letter-spacing: -0.3px;
-  }
-  .btn-generate:hover:not(:disabled) { opacity: .85; }
-  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+/* ── 설정 그리드 ─────────────────────────────────────────────── */
+.settings-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+@media (max-width: 480px) { .settings-grid { grid-template-columns: 1fr; } }
 
-  /* ── 진행 ── */
-  .progress-wrap {
-    margin-top: 18px; display: none;
-  }
-  .progress-bar-bg {
-    background: #e8e8e4; border-radius: 6px; height: 8px; overflow: hidden;
-  }
-  .progress-bar-fill {
-    height: 100%; background: #4a7cf6;
-    border-radius: 6px; transition: width .4s ease;
-    width: 0%;
-  }
-  .progress-msg {
-    font-size: 12px; color: #888; margin-top: 8px; text-align: center;
-  }
+.setting-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.setting-card label {
+  font-size: 11px; font-weight: 600; color: var(--text-3);
+  letter-spacing: .5px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 12px;
+}
+.auto-badge {
+  font-size: 9px; background: var(--accent); color: #fff;
+  padding: 1px 6px; border-radius: 10px;
+  display: none; font-weight: 700; letter-spacing: .3px;
+}
+.slider-row { display: flex; align-items: center; gap: 10px; }
 
-  /* ── 결과 ── */
-  .result-wrap {
-    margin-top: 18px; display: none;
-    background: #fff; border: 1px solid #e8e8e4;
-    border-radius: 12px; padding: 20px;
-    text-align: center;
-  }
-  .result-wrap h3 { font-size: 16px; margin-bottom: 6px; }
-  .result-wrap p  { font-size: 13px; color: #888; margin-bottom: 16px; }
-  .result-preview {
-    max-width: 180px; margin: 0 auto 16px;
-    border-radius: 8px; overflow: hidden;
-    border: 1px solid #e0e0da;
-  }
-  .result-preview img { width: 100%; display: block; }
-  .btn-download {
-    display: inline-block; padding: 12px 32px;
-    background: #4a7cf6; color: #fff;
-    border: none; border-radius: 10px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    text-decoration: none; transition: opacity .15s;
-  }
-  .btn-download:hover { opacity: .85; }
-  .btn-reset {
-    display: inline-block; padding: 12px 24px;
-    background: #f0f0ec; color: #555;
-    border: none; border-radius: 10px;
-    font-size: 14px; font-weight: 500; cursor: pointer;
-    margin-left: 10px;
-  }
+input[type=range] {
+  flex: 1; -webkit-appearance: none;
+  height: 3px; background: var(--surface2); border-radius: 2px;
+  outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.2);
+  cursor: pointer; transition: box-shadow .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 5px rgba(99,102,241,.3);
+}
+.slider-val {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  min-width: 44px; text-align: right;
+}
 
-  /* ── 에러 ── */
-  .error-msg {
-    background: #fff0f0; border: 1px solid #ffcdd2;
-    border-radius: 10px; padding: 14px 16px;
-    font-size: 13px; color: #c62828; margin-top: 14px;
-    display: none;
-  }
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 32px 9px 12px;
+  font-size: 13px;
+  background: var(--surface2);
+  color: var(--text);
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color .2s;
+}
+select:focus { border-color: var(--border-focus); }
+select option { background: var(--surface2); }
+
+/* ── 효과 그리드 ─────────────────────────────────────────────── */
+.effect-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+@media (max-width: 400px) { .effect-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.effect-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 10px 14px;
+  cursor: pointer; text-align: center;
+  transition: all .2s; user-select: none;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: relative; overflow: hidden;
+}
+.effect-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--accent-soft);
+  opacity: 0; transition: opacity .2s;
+}
+.effect-card:hover { border-color: rgba(99,102,241,.4); }
+.effect-card:hover::after { opacity: 1; }
+.effect-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.effect-card.active::after { opacity: 1; }
+.effect-preview {
+  width: 44px; height: 44px; border-radius: 8px;
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; position: relative; z-index: 1;
+  transition: transform .3s;
+}
+.effect-card:hover .effect-preview { transform: scale(1.12); }
+.effect-card.active .effect-preview { background: rgba(99,102,241,.2); }
+.effect-name {
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  position: relative; z-index: 1;
+}
+.effect-card.active .effect-name { color: #a5b4fc; }
+.effect-desc {
+  font-size: 10px; color: var(--text-3);
+  position: relative; z-index: 1;
+}
+
+/* ── 자막 섹션 ───────────────────────────────────────────────── */
+.subtitle-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.subtitle-screen {
+  background: #000;
+  min-height: 80px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  padding: 20px;
+}
+.subtitle-screen-inner {
+  position: relative; width: 100%; text-align: center;
+}
+.sub-preview-text {
+  color: #fff; font-size: 16px; font-weight: 700;
+  text-shadow: 0 1px 8px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,1);
+  white-space: nowrap;
+  display: inline-block;
+}
+.sub-preview-text.scroll { animation: subScroll 5s linear infinite; }
+.sub-preview-text.fade { animation: subFade 3s ease-in-out infinite; }
+.sub-preview-text.timing { animation: subTiming 4s steps(10, end) infinite; }
+.sub-preview-text.static { animation: none; }
+@keyframes subScroll {
+  from { transform: translateX(110%); }
+  to   { transform: translateX(-110%); }
+}
+@keyframes subFade {
+  0%, 100% { opacity: 0; transform: translateY(4px); }
+  20%, 80%  { opacity: 1; transform: translateY(0); }
+}
+@keyframes subTiming {
+  0%  { letter-spacing: -1px; opacity: .4; }
+  50% { letter-spacing: 1px; opacity: 1; }
+  100%{ letter-spacing: -1px; opacity: .4; }
+}
+
+.subtitle-anim-row {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+}
+.anim-btn {
+  font-size: 12px; padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent; color: var(--text-2);
+  cursor: pointer; transition: all .15s;
+}
+.anim-btn:hover { border-color: rgba(99,102,241,.4); color: var(--text); }
+.anim-btn.active {
+  border-color: var(--accent); background: var(--accent-soft);
+  color: #a5b4fc; font-weight: 600;
+}
+
+.subtitle-style-row {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  padding: 12px 14px;
+}
+.style-group {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.style-group label {
+  font-size: 11px; color: var(--text-3); font-weight: 500;
+  white-space: nowrap;
+}
+.style-group select { width: auto; min-width: 110px; }
+
+input[type=color] {
+  width: 32px; height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer; padding: 2px;
+  background: var(--surface2);
+}
+
+/* ── 생성 버튼 ───────────────────────────────────────────────── */
+.generate-section { margin-top: 8px; }
+
+.btn-generate {
+  width: 100%; padding: 18px;
+  background: var(--accent);
+  color: #fff;
+  border: none; border-radius: var(--radius);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  letter-spacing: -0.3px;
+  transition: opacity .2s, transform .15s, box-shadow .2s;
+  position: relative; overflow: hidden;
+  box-shadow: 0 0 0 0 var(--accent-glow);
+}
+.btn-generate::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.12), transparent);
+}
+.btn-generate:hover:not(:disabled) {
+  opacity: .92; transform: translateY(-1px);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+.btn-generate:active:not(:disabled) { transform: translateY(0); }
+.btn-generate:disabled { opacity: .4; cursor: not-allowed; }
+
+.btn-inner { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.btn-spinner {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  animation: spin .7s linear infinite;
+  display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 진행 패널 ───────────────────────────────────────────────── */
+.progress-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: none;
+}
+.progress-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.progress-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.progress-pct {
+  font-size: 14px; font-weight: 700; color: var(--accent);
+}
+.progress-track {
+  height: 6px; background: var(--surface2); border-radius: 6px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #818cf8);
+  border-radius: 6px;
+  transition: width .5s cubic-bezier(.4, 0, .2, 1);
+  width: 0%;
+  position: relative;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: 40px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.3));
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+.progress-msg {
+  font-size: 12px; color: var(--text-3); margin-top: 10px;
+  min-height: 18px;
+}
+
+/* ── 에러 ────────────────────────────────────────────────────── */
+.error-box {
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+  font-size: 13px; color: #fca5a5;
+  display: none; align-items: flex-start; gap: 10px;
+}
+.error-icon { font-size: 16px; flex-shrink: 0; margin-top: -1px; }
+
+/* ── 결과 패널 ───────────────────────────────────────────────── */
+.result-panel {
+  background: var(--surface);
+  border: 1px solid rgba(34,197,94,.3);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: none;
+}
+.result-top {
+  background: var(--green-soft);
+  border-bottom: 1px solid rgba(34,197,94,.15);
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.result-check {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(34,197,94,.2); border: 2px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.result-top-text strong {
+  font-size: 15px; font-weight: 700; color: var(--text); display: block;
+}
+.result-top-text span {
+  font-size: 12px; color: var(--text-3);
+}
+.result-body {
+  display: flex; gap: 20px; padding: 20px;
+  align-items: flex-start;
+}
+@media (max-width: 480px) { .result-body { flex-direction: column; } }
+.result-thumb {
+  width: 100px; flex-shrink: 0;
+  border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--border);
+  aspect-ratio: 9/16;
+  background: #000;
+}
+.result-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.result-actions { flex: 1; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+.result-info { font-size: 12px; color: var(--text-3); line-height: 1.6; }
+
+.btn-dl {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 13px 24px; background: var(--green);
+  color: #fff; border: none; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  text-decoration: none; transition: opacity .15s, transform .15s;
+}
+.btn-dl:hover { opacity: .9; transform: translateY(-1px); }
+
+.btn-reset {
+  padding: 12px 24px;
+  background: var(--surface2); color: var(--text-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.btn-reset:hover { border-color: var(--accent); color: var(--text); }
 </style>
 </head>
 <body>
 
 <!-- 헤더 -->
-<div class="header">
-  <h1>YouTube Shorts 영상 생성 에이전트</h1>
-  <p>이미지 6장 · 나레이션 · 자막 파일을 업로드하면 ffmpeg 기반 영상을 제작합니다</p>
-</div>
-
-<div class="main">
-
-  <!-- 파일 업로드 -->
-  <div class="section-title">파일 업로드</div>
-
-  <!-- 이미지 -->
-  <div class="upload-card" id="imgCard">
-    <input type="file" id="imgInput" accept=".jpg,.jpeg,.png,.webp" multiple>
-    <div class="upload-icon">🖼</div>
-    <div class="upload-info">
-      <strong>이미지 파일 <span style="font-weight:400;color:#aaa;font-size:12px">(최대 6장)</span></strong>
-      <span>JPG · PNG · WEBP — 권장 1080×1920px</span>
-      <div class="upload-filelist" id="imgList"></div>
-    </div>
+<header class="header">
+  <div class="header-brand">
+    <div class="header-logo">N</div>
+    <h1>Namu AI</h1>
   </div>
-  <div class="img-preview-grid" id="imgPreviews"></div>
+  <span class="header-sub">YouTube Shorts 영상 생성</span>
+</header>
 
-  <!-- 오디오 -->
-  <div class="upload-card" id="audioCard">
-    <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.aac">
-    <div class="upload-icon">🎵</div>
-    <div class="upload-info">
-      <strong>나레이션 오디오 <span id="audioDurationBadge" class="sync-badge" style="display:none"></span></strong>
-      <span>MP3 · WAV · M4A · AAC — 업로드 시 영상 길이가 오디오에 맞춰 자동 설정됩니다</span>
-      <div class="upload-filelist" id="audioList"></div>
-    </div>
+<main class="main">
+
+  <!-- ① 이미지 업로드 -->
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>이미지 업로드 <span style="color:var(--text-3);font-weight:400;text-transform:none;font-size:12px">최대 6장 · 순서대로 재생됩니다</span></h2>
   </div>
 
-  <!-- 자막 -->
-  <div class="upload-card" id="subCard">
-    <input type="file" id="subInput" accept=".srt,.vtt,.ass">
-    <div class="upload-icon">📝</div>
-    <div class="upload-info">
-      <strong>자막 파일</strong>
-      <span>SRT · VTT · ASS — 오디오와 동기화, 2줄씩 자동 표시</span>
-      <div class="upload-filelist" id="subList"></div>
-    </div>
+  <div class="img-slot-grid" id="imgSlotGrid">
+    <!-- JS로 생성 -->
   </div>
 
-  <!-- 썸네일 -->
-  <div class="upload-card" id="thumbCard">
-    <input type="file" id="thumbInput" accept=".jpg,.jpeg,.png">
-    <div class="upload-icon">🖼</div>
-    <div class="upload-info">
-      <strong>썸네일 <span style="font-weight:400;color:#aaa;font-size:12px">(선택)</span></strong>
-      <span>JPG · PNG — 1280×720px 권장</span>
-      <div class="upload-filelist" id="thumbList"></div>
+  <!-- ② 오디오 · 자막 -->
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>오디오 &amp; 자막</h2>
+  </div>
+
+  <div class="file-row">
+    <div class="file-card" id="audioCard">
+      <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.aac">
+      <div class="file-icon">🎵</div>
+      <div class="file-info">
+        <strong>나레이션 오디오</strong>
+        <span>MP3 · WAV · M4A · AAC</span>
+        <span class="file-name" id="audioName">파일을 선택하세요</span>
+      </div>
+      <span class="file-badge" id="audioBadge" style="display:none"></span>
+    </div>
+
+    <div class="file-card" id="subCard">
+      <input type="file" id="subInput" accept=".srt,.vtt,.ass">
+      <div class="file-icon">💬</div>
+      <div class="file-info">
+        <strong>자막 파일</strong>
+        <span>SRT · VTT · ASS</span>
+        <span class="file-name" id="subName">파일을 선택하세요</span>
+      </div>
     </div>
   </div>
 
-  <!-- 오디오 동기화 안내 -->
-  <div class="sync-info" id="syncInfo">
-    🔗 <strong>오디오 동기화 활성</strong> — 영상 길이가 오디오(<span id="syncDur">?</span>초)에 맞춰 자동 설정됩니다.
-    이미지 <span id="syncImgCount">?</span>장 × <span id="syncPerImg">?</span>초 · 자막은 2줄씩 동기화됩니다.
+  <!-- 동기화 배너 -->
+  <div class="sync-banner" id="syncBanner">
+    <div class="sync-dot"></div>
+    <span>
+      <strong>오디오 동기화 활성</strong> —
+      오디오 <strong id="syncDur">?</strong>초 ·
+      이미지 <strong id="syncImgCount">?</strong>장 ·
+      장당 <strong id="syncPerImg">?</strong>초로 자동 설정됩니다
+    </span>
   </div>
 
-  <!-- 영상 설정 -->
-  <div class="section-title">영상 설정</div>
+  <!-- ③ 영상 설정 -->
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>영상 설정</h2>
+  </div>
+
   <div class="settings-grid">
-    <div class="settings-card">
-      <label>사진당 표시 시간 (초) <span id="autoSyncLabel" style="display:none;color:#4a7cf6;font-weight:600">🔗 오디오 자동</span></label>
+    <div class="setting-card">
+      <label>
+        장당 표시 시간
+        <span class="auto-badge" id="autoLabel">AUTO</span>
+      </label>
       <div class="slider-row">
         <input type="range" id="duration" min="1" max="10" step="0.5" value="4">
-        <span class="slider-value" id="durationVal">4초</span>
+        <span class="slider-val" id="durationVal">4초</span>
       </div>
     </div>
-    <div class="settings-card">
-      <label>전환 효과 길이 (초)</label>
+    <div class="setting-card">
+      <label>전환 효과 길이</label>
       <div class="slider-row">
         <input type="range" id="transition" min="0.1" max="1.5" step="0.1" value="0.6">
-        <span class="slider-value" id="transitionVal">0.6초</span>
+        <span class="slider-val" id="transitionVal">0.6초</span>
       </div>
     </div>
-    <div class="settings-card">
+    <div class="setting-card">
       <label>해상도</label>
       <select id="resolution">
-        <option value="720x1280" selected>720×1280</option>
-        <option value="1080x1920">1080×1920</option>
-        <option value="540x960">540×960</option>
+        <option value="720x1280" selected>720 × 1280 (기본)</option>
+        <option value="1080x1920">1080 × 1920 (풀HD)</option>
+        <option value="540x960">540 × 960 (경량)</option>
       </select>
-      <div class="select-hint">Shorts 표준</div>
     </div>
-    <div class="settings-card">
+    <div class="setting-card">
       <label>출력 포맷</label>
       <select id="format">
-        <option value="h264" selected>MP4 (H.264)</option>
-        <option value="h265">MP4 (H.265)</option>
+        <option value="h264" selected>MP4 / H.264 (권장)</option>
+        <option value="h265">MP4 / H.265 (HEVC)</option>
       </select>
-      <div class="select-hint">유튜브 권장</div>
     </div>
   </div>
 
-  <!-- 사진 움직임 효과 -->
-  <div class="section-title">사진 움직임 효과</div>
+  <!-- ④ 움직임 효과 -->
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>사진 움직임 효과</h2>
+  </div>
+
   <div class="effect-grid" id="effectGrid">
-    <button class="effect-btn active" data-effect="ken_burns">
-      <span class="icon">🔍</span><span class="label">Ken Burns (줌)</span>
+    <button class="effect-card active" data-effect="ken_burns">
+      <div class="effect-preview">🔭</div>
+      <div class="effect-name">Ken Burns</div>
+      <div class="effect-desc">줌 + 패닝 교대</div>
     </button>
-    <button class="effect-btn" data-effect="pan">
-      <span class="icon">↔</span><span class="label">Pan (좌우)</span>
+    <button class="effect-card" data-effect="pan">
+      <div class="effect-preview">↔️</div>
+      <div class="effect-name">Pan</div>
+      <div class="effect-desc">좌우 이동</div>
     </button>
-    <button class="effect-btn" data-effect="tilt">
-      <span class="icon">↕</span><span class="label">Tilt (상하)</span>
+    <button class="effect-card" data-effect="tilt">
+      <div class="effect-preview">↕️</div>
+      <div class="effect-name">Tilt</div>
+      <div class="effect-desc">상하 이동</div>
     </button>
-    <button class="effect-btn" data-effect="zoom_in">
-      <span class="icon">⊕</span><span class="label">Zoom In</span>
+    <button class="effect-card" data-effect="zoom_in">
+      <div class="effect-preview">🔍</div>
+      <div class="effect-name">Zoom In</div>
+      <div class="effect-desc">점점 확대</div>
     </button>
-    <button class="effect-btn" data-effect="zoom_out">
-      <span class="icon">⊖</span><span class="label">Zoom Out</span>
+    <button class="effect-card" data-effect="zoom_out">
+      <div class="effect-preview">🔎</div>
+      <div class="effect-name">Zoom Out</div>
+      <div class="effect-desc">점점 축소</div>
     </button>
-    <button class="effect-btn" data-effect="shake">
-      <span class="icon">〰</span><span class="label">Shake</span>
+    <button class="effect-card" data-effect="shake">
+      <div class="effect-preview">〰️</div>
+      <div class="effect-name">Shake</div>
+      <div class="effect-desc">흔들림 효과</div>
     </button>
   </div>
 
-  <!-- 자막 스타일 -->
-  <div class="section-title">자막 스타일</div>
-  <div>
-    <div class="subtitle-preview">
-      <span class="subtitle-text scroll" id="subPreview">자막이 흐르듯 좌에서 우로 움직입니다 ✨</span>
+  <!-- ⑤ 자막 스타일 -->
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>자막 스타일</h2>
+  </div>
+
+  <div class="subtitle-section">
+    <div class="subtitle-screen">
+      <div class="subtitle-screen-inner">
+        <span class="sub-preview-text scroll" id="subPreview">나레이션과 함께 자막이 표시됩니다</span>
+      </div>
     </div>
-    <div class="subtitle-controls">
-      <button class="sub-btn active" data-anim="scroll">흐르는 자막</button>
-      <button class="sub-btn" data-anim="fade">페이드인/아웃</button>
-      <button class="sub-btn" data-anim="timing">타이밍 효과</button>
-      <button class="sub-btn" data-anim="static">하단 고정</button>
+    <div class="subtitle-anim-row">
+      <button class="anim-btn active" data-anim="scroll">흐르는 자막</button>
+      <button class="anim-btn" data-anim="fade">페이드 인/아웃</button>
+      <button class="anim-btn" data-anim="timing">타이밍 효과</button>
+      <button class="anim-btn" data-anim="static">하단 고정</button>
     </div>
-    <div class="sub-style-row">
-      <label>폰트</label>
-      <select id="subFont">
-        <option value="Arial">Arial</option>
-        <option value="NanumGothic">나눔고딕</option>
-        <option value="Malgun Gothic">맑은 고딕</option>
-        <option value="NanumBarunGothic">나눔바른고딕</option>
-      </select>
-      <label>색상</label>
-      <input type="color" id="subColor" value="#ffffff" title="자막 색상">
-      <label>크기</label>
-      <input type="range" id="subSize" min="14" max="36" value="22"
-             style="width:80px">
-      <span id="subSizeVal" style="font-size:12px;min-width:24px">22</span>
+    <div class="subtitle-style-row">
+      <div class="style-group">
+        <label>폰트</label>
+        <select id="subFont">
+          <option value="Arial">Arial</option>
+          <option value="NanumGothic">나눔고딕</option>
+          <option value="Malgun Gothic">맑은 고딕</option>
+          <option value="NanumBarunGothic">나눔바른고딕</option>
+        </select>
+      </div>
+      <div class="style-group">
+        <label>색상</label>
+        <input type="color" id="subColor" value="#ffffff">
+      </div>
+      <div class="style-group">
+        <label>크기</label>
+        <input type="range" id="subSize" min="14" max="36" value="22" style="width:70px">
+        <span style="font-size:12px;color:var(--text-2);min-width:24px" id="subSizeVal">22</span>
+      </div>
     </div>
   </div>
 
   <!-- 생성 버튼 -->
-  <div class="generate-wrap">
-    <button class="btn-generate" id="btnGenerate">영상 제작 시작</button>
+  <div class="generate-section">
+    <button class="btn-generate" id="btnGenerate">
+      <div class="btn-inner">
+        <div class="btn-spinner" id="btnSpinner"></div>
+        <span id="btnText">영상 제작 시작</span>
+      </div>
+    </button>
   </div>
 
-  <!-- 진행 표시 -->
-  <div class="progress-wrap" id="progressWrap">
-    <div class="progress-bar-bg">
-      <div class="progress-bar-fill" id="progressFill"></div>
+  <!-- 진행 패널 -->
+  <div class="progress-panel" id="progressPanel">
+    <div class="progress-top">
+      <span class="progress-title">영상 처리 중...</span>
+      <span class="progress-pct" id="progressPct">0%</span>
     </div>
-    <div class="progress-msg" id="progressMsg">처리 중...</div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-msg" id="progressMsg">시작 중...</div>
   </div>
 
   <!-- 에러 -->
-  <div class="error-msg" id="errorMsg"></div>
-
-  <!-- 결과 -->
-  <div class="result-wrap" id="resultWrap">
-    <h3>✅ 영상 제작 완료!</h3>
-    <p id="resultInfo"></p>
-    <div class="result-preview" id="resultPreview"></div>
-    <a class="btn-download" id="btnDownload" href="#">다운로드</a>
-    <button class="btn-reset" id="btnReset">새로 만들기</button>
+  <div class="error-box" id="errorBox">
+    <span class="error-icon">⚠</span>
+    <span id="errorText"></span>
   </div>
 
-</div><!-- /main -->
+  <!-- 결과 -->
+  <div class="result-panel" id="resultPanel">
+    <div class="result-top">
+      <div class="result-check">✓</div>
+      <div class="result-top-text">
+        <strong>영상 제작 완료</strong>
+        <span id="resultMeta">—</span>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="result-thumb" id="resultThumb"></div>
+      <div class="result-actions">
+        <div class="result-info" id="resultInfo"></div>
+        <a class="btn-dl" id="btnDownload" href="#">↓ MP4 다운로드</a>
+        <button class="btn-reset" id="btnReset">새로 만들기</button>
+      </div>
+    </div>
+  </div>
+
+</main>
 
 <script>
-// ── 이미지 파일 목록 관리 ──────────────────────────────────────────────────
-const imgFiles = [];
+/* ── 이미지 슬롯 ─────────────────────────────────────────── */
+const imgFiles = new Array(6).fill(null);
+const grid = document.getElementById('imgSlotGrid');
 
-document.getElementById('imgInput').addEventListener('change', function(e) {
-  const newFiles = Array.from(e.target.files).slice(0, 6 - imgFiles.length);
-  newFiles.forEach(f => {
-    if (imgFiles.length < 6) imgFiles.push(f);
-  });
-  renderImgPreviews();
-  this.value = '';
-});
+function buildSlots() {
+  grid.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'img-slot' + (imgFiles[i] ? ' has-img' : '');
+    slot.dataset.idx = i;
 
-function renderImgPreviews() {
-  const el = document.getElementById('imgPreviews');
-  const card = document.getElementById('imgCard');
-  document.getElementById('imgList').textContent =
-    imgFiles.length ? `${imgFiles.length}장 선택됨` : '';
-  card.classList.toggle('filled', imgFiles.length > 0);
-  el.innerHTML = '';
-  imgFiles.forEach((f, i) => {
-    const url = URL.createObjectURL(f);
-    const wrap = document.createElement('div');
-    wrap.className = 'img-thumb-del';
-    wrap.innerHTML =
-      `<img class="img-thumb" src="${url}">` +
-      `<button onclick="removeImg(${i})">✕</button>`;
-    el.appendChild(wrap);
+    if (imgFiles[i]) {
+      const url = URL.createObjectURL(imgFiles[i]);
+      slot.innerHTML =
+        `<img src="${url}" alt="이미지 ${i+1}">` +
+        `<button class="img-slot-del" data-i="${i}" title="삭제">✕</button>`;
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.jpg,.jpeg,.png,.webp';
+      input.dataset.slot = i;
+      input.addEventListener('change', onSlotChange);
+      slot.appendChild(input);
+      slot.insertAdjacentHTML('beforeend',
+        `<span class="img-slot-icon">＋</span>` +
+        `<span class="img-slot-num">${i + 1}</span>`);
+    }
+
+    slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+    slot.addEventListener('drop', e => {
+      e.preventDefault(); slot.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) { imgFiles[i] = f; buildSlots(); updateSync(); }
+    });
+
+    grid.appendChild(slot);
+  }
+
+  grid.querySelectorAll('.img-slot-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      imgFiles[+btn.dataset.i] = null;
+      buildSlots(); updateSync();
+    });
   });
 }
 
-function removeImg(i) {
-  imgFiles.splice(i, 1);
-  renderImgPreviews();
+function onSlotChange(e) {
+  const i = +e.target.dataset.slot;
+  const f = e.target.files[0];
+  if (f) { imgFiles[i] = f; buildSlots(); updateSync(); }
 }
 
-// ── 오디오 길이 읽기 및 동기화 UI ─────────────────────────────────────────
+buildSlots();
+
+/* ── 오디오 동기화 ───────────────────────────────────────── */
 let audioDuration = null;
 
-function updateSyncUI() {
-  const info   = document.getElementById('syncInfo');
-  const badge  = document.getElementById('audioDurationBadge');
-  const label  = document.getElementById('autoSyncLabel');
+function updateSync() {
+  const count  = imgFiles.filter(Boolean).length;
+  const banner = document.getElementById('syncBanner');
+  const badge  = document.getElementById('audioBadge');
+  const label  = document.getElementById('autoLabel');
   const slider = document.getElementById('duration');
   const valEl  = document.getElementById('durationVal');
 
-  if (audioDuration && imgFiles.length > 0) {
-    const perImg = (audioDuration / imgFiles.length).toFixed(2);
-    info.style.display  = 'block';
-    badge.style.display = 'inline';
-    badge.textContent   = `${audioDuration.toFixed(1)}초`;
-    label.style.display = 'inline';
-    document.getElementById('syncDur').textContent     = audioDuration.toFixed(1);
-    document.getElementById('syncImgCount').textContent = imgFiles.length;
-    document.getElementById('syncPerImg').textContent   = perImg;
-    slider.value   = Math.min(10, Math.max(1, parseFloat(perImg)));
-    valEl.textContent = parseFloat(perImg).toFixed(2) + '초';
+  if (audioDuration && count > 0) {
+    const per = (audioDuration / count).toFixed(2);
+    banner.style.display = 'flex';
+    badge.style.display  = 'inline';
+    badge.textContent    = audioDuration.toFixed(1) + '초';
+    label.style.display  = 'inline';
+    document.getElementById('syncDur').textContent      = audioDuration.toFixed(1);
+    document.getElementById('syncImgCount').textContent = count;
+    document.getElementById('syncPerImg').textContent   = per;
+    slider.value      = Math.min(10, Math.max(1, +per));
+    valEl.textContent = (+per).toFixed(2) + '초';
   } else {
-    info.style.display  = 'none';
-    badge.style.display = 'none';
-    label.style.display = 'none';
+    banner.style.display = 'none';
+    badge.style.display  = 'none';
+    label.style.display  = 'none';
   }
 }
 
-// 이미지 변경시 동기화 UI도 갱신
-const _origRenderImgPreviews = renderImgPreviews;
-renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
-
-// ── 단일 파일 카드 ─────────────────────────────────────────────────────────
-['audio','sub','thumb'].forEach(id => {
+/* ── 파일 카드 ───────────────────────────────────────────── */
+[['audio','audioCard','audioName'], ['sub','subCard','subName']].forEach(([id, cardId, nameId]) => {
   const input = document.getElementById(id + 'Input');
   input.addEventListener('change', function() {
-    const card  = document.getElementById(id + 'Card');
-    const list  = document.getElementById(id + 'List');
-    const name  = this.files[0] ? this.files[0].name : '';
-    list.textContent = name;
-    card.classList.toggle('filled', !!name);
-
-    // 오디오 파일 길이 읽기
-    if (id === 'audio' && this.files[0]) {
-      const audioEl = document.createElement('audio');
-      audioEl.preload = 'metadata';
-      audioEl.onloadedmetadata = function() {
-        audioDuration = audioEl.duration;
-        URL.revokeObjectURL(audioEl.src);
-        updateSyncUI();
-      };
-      audioEl.src = URL.createObjectURL(this.files[0]);
-    }
-    if (id === 'audio' && !this.files[0]) {
-      audioDuration = null;
-      updateSyncUI();
+    const f = this.files[0];
+    document.getElementById(nameId).textContent = f ? f.name : '파일을 선택하세요';
+    document.getElementById(cardId).classList.toggle('filled', !!f);
+    if (id === 'audio') {
+      if (f) {
+        const a = document.createElement('audio');
+        a.preload = 'metadata';
+        a.onloadedmetadata = () => { audioDuration = a.duration; URL.revokeObjectURL(a.src); updateSync(); };
+        a.src = URL.createObjectURL(f);
+      } else { audioDuration = null; updateSync(); }
     }
   });
 });
 
-// ── 슬라이더 ───────────────────────────────────────────────────────────────
+/* ── 슬라이더 ────────────────────────────────────────────── */
 document.getElementById('duration').addEventListener('input', function() {
   document.getElementById('durationVal').textContent = this.value + '초';
 });
@@ -549,31 +900,38 @@ document.getElementById('transition').addEventListener('input', function() {
 });
 document.getElementById('subSize').addEventListener('input', function() {
   document.getElementById('subSizeVal').textContent = this.value;
+  document.getElementById('subPreview').style.fontSize = this.value + 'px';
 });
 
-// ── 효과 버튼 ──────────────────────────────────────────────────────────────
+/* ── 효과 카드 ───────────────────────────────────────────── */
 let selectedEffect = 'ken_burns';
-document.getElementById('effectGrid').addEventListener('click', function(e) {
-  const btn = e.target.closest('.effect-btn');
-  if (!btn) return;
-  document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  selectedEffect = btn.dataset.effect;
+document.getElementById('effectGrid').addEventListener('click', e => {
+  const card = e.target.closest('.effect-card');
+  if (!card) return;
+  document.querySelectorAll('.effect-card').forEach(c => c.classList.remove('active'));
+  card.classList.add('active');
+  selectedEffect = card.dataset.effect;
 });
 
-// ── 자막 애니메이션 버튼 ───────────────────────────────────────────────────
+/* ── 자막 애니메이션 ─────────────────────────────────────── */
 let subAnim = 'scroll';
-document.querySelectorAll('.sub-btn').forEach(btn => {
+const subAnimTexts = {
+  scroll: '나레이션과 함께 자막이 흘러갑니다 →',
+  fade:   '자막이 부드럽게 나타났다 사라집니다',
+  timing: '글자가 타이밍에 맞게 강조됩니다',
+  static: '자막이 하단에 고정되어 표시됩니다',
+};
+document.querySelectorAll('.anim-btn').forEach(btn => {
   btn.addEventListener('click', function() {
-    document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
     this.classList.add('active');
     subAnim = this.dataset.anim;
     const el = document.getElementById('subPreview');
-    el.className = 'subtitle-text ' + (subAnim === 'timing' ? 'fade' : subAnim);
+    el.className = 'sub-preview-text ' + subAnim;
+    el.textContent = subAnimTexts[subAnim];
   });
 });
 
-// ── 자막 색상 미리보기 ─────────────────────────────────────────────────────
 document.getElementById('subColor').addEventListener('input', function() {
   document.getElementById('subPreview').style.color = this.value;
 });
@@ -581,29 +939,22 @@ document.getElementById('subFont').addEventListener('change', function() {
   document.getElementById('subPreview').style.fontFamily = this.value;
 });
 
-// ── 영상 제작 ──────────────────────────────────────────────────────────────
+/* ── 영상 제작 ───────────────────────────────────────────── */
 document.getElementById('btnGenerate').addEventListener('click', startGenerate);
 
 async function startGenerate() {
-  if (imgFiles.length === 0) {
-    showError('이미지를 1장 이상 업로드해주세요.');
-    return;
-  }
-  hideError();
-  setUI('loading');
+  if (!imgFiles.some(Boolean)) { showError('이미지를 1장 이상 업로드해주세요.'); return; }
+  hideError(); setUI('loading');
 
   const form = new FormData();
+  let fi = 0;
+  imgFiles.forEach(f => { if (f) form.append(`image_${fi++}`, f); });
 
-  // 이미지 (최대 6장)
-  imgFiles.forEach((f, i) => form.append(`image_${i}`, f));
-
-  // 오디오 / 자막
   const audioFile = document.getElementById('audioInput').files[0];
   const subFile   = document.getElementById('subInput').files[0];
   if (audioFile) form.append('audio',    audioFile);
   if (subFile)   form.append('subtitle', subFile);
 
-  // 설정
   const [w, h] = document.getElementById('resolution').value.split('x');
   form.append('width',      w);
   form.append('height',     h);
@@ -614,110 +965,82 @@ async function startGenerate() {
   form.append('subtitle_size', document.getElementById('subSize').value);
   form.append('subtitle_anim', subAnim);
 
-  // 색상 → ASS BGR hex 변환 (#rrggbb → &H00bbggrr)
   const hex = document.getElementById('subColor').value.slice(1);
   const r = hex.slice(0,2), g = hex.slice(2,4), b = hex.slice(4,6);
   form.append('subtitle_color', `&H00${b}${g}${r}`.toUpperCase());
 
   try {
-    const res = await fetch('/generate', { method: 'POST', body: form });
+    const res  = await fetch('/generate', { method: 'POST', body: form });
     const data = await res.json();
     if (data.error) { showError(data.error); setUI('idle'); return; }
     listenProgress(data.job_id);
-  } catch (e) {
-    showError('서버 연결 오류: ' + e.message);
-    setUI('idle');
-  }
+  } catch(e) { showError('서버 연결 오류: ' + e.message); setUI('idle'); }
 }
 
 function listenProgress(jobId) {
   const es = new EventSource(`/progress/${jobId}`);
-
   es.onmessage = function(e) {
     const d = JSON.parse(e.data);
     if (d.error) { showError(d.error); setUI('idle'); es.close(); return; }
-
-    document.getElementById('progressFill').style.width = d.pct + '%';
-    document.getElementById('progressMsg').textContent  = d.msg;
-
-    if (d.status === 'done') {
-      es.close();
-      showResult(jobId, d.msg);
-    } else if (d.status === 'error') {
-      es.close();
-      showError(d.msg);
-      setUI('idle');
-    }
+    updateProgress(d.pct, d.msg);
+    if (d.status === 'done')        { es.close(); showResult(jobId, d.msg); }
+    else if (d.status === 'error')  { es.close(); showError(d.msg); setUI('idle'); }
   };
-
-  es.onerror = function() {
-    es.close();
-    // SSE 종료 후 status API로 최종 확인
-    setTimeout(() => checkStatus(jobId), 1000);
-  };
+  es.onerror = function() { es.close(); setTimeout(() => pollStatus(jobId), 1000); };
 }
 
-async function checkStatus(jobId) {
+async function pollStatus(jobId) {
   try {
-    const res = await fetch(`/status/${jobId}`);
-    const d = await res.json();
-    if (d.status === 'done')  showResult(jobId, d.message);
+    const d = await (await fetch(`/status/${jobId}`)).json();
+    if (d.status === 'done')       showResult(jobId, d.message);
     else if (d.status === 'error') { showError(d.message); setUI('idle'); }
-    else setTimeout(() => checkStatus(jobId), 1500);
-  } catch(e) { setTimeout(() => checkStatus(jobId), 2000); }
+    else setTimeout(() => pollStatus(jobId), 1500);
+  } catch { setTimeout(() => pollStatus(jobId), 2000); }
+}
+
+function updateProgress(pct, msg) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent  = pct + '%';
+  document.getElementById('progressMsg').textContent  = msg;
 }
 
 function showResult(jobId, msg) {
   setUI('done');
-  document.getElementById('resultInfo').textContent = msg;
-  document.getElementById('btnDownload').href = `/download/${jobId}`;
-
-  // 썸네일 로드
-  const preview = document.getElementById('resultPreview');
-  const img = document.createElement('img');
+  document.getElementById('resultMeta').textContent = msg;
+  document.getElementById('resultInfo').textContent  = msg;
+  document.getElementById('btnDownload').href        = `/download/${jobId}`;
+  const thumb = document.getElementById('resultThumb');
+  const img   = document.createElement('img');
   img.src = `/thumbnail/${jobId}?t=${Date.now()}`;
-  img.onerror = () => preview.style.display = 'none';
-  preview.innerHTML = '';
-  preview.appendChild(img);
+  img.onerror = () => thumb.style.display = 'none';
+  thumb.innerHTML = ''; thumb.appendChild(img);
 }
 
-// ── UI 상태 제어 ────────────────────────────────────────────────────────────
+/* ── UI 상태 ─────────────────────────────────────────────── */
 function setUI(state) {
-  const btn  = document.getElementById('btnGenerate');
-  const prog = document.getElementById('progressWrap');
-  const res  = document.getElementById('resultWrap');
+  const btn     = document.getElementById('btnGenerate');
+  const spinner = document.getElementById('btnSpinner');
+  const btnText = document.getElementById('btnText');
+  const prog    = document.getElementById('progressPanel');
+  const res     = document.getElementById('resultPanel');
 
-  if (state === 'loading') {
-    btn.disabled = true;
-    btn.textContent = '제작 중...';
-    prog.style.display = 'block';
-    res.style.display  = 'none';
-  } else if (state === 'done') {
-    btn.disabled = false;
-    btn.textContent = '영상 제작 시작';
-    prog.style.display = 'none';
-    res.style.display  = 'block';
-  } else {
-    btn.disabled = false;
-    btn.textContent = '영상 제작 시작';
-    prog.style.display = 'none';
-  }
+  spinner.style.display = state === 'loading' ? 'block' : 'none';
+  btn.disabled          = state === 'loading';
+  btnText.textContent   = state === 'loading' ? '제작 중...' : '영상 제작 시작';
+  prog.style.display    = state === 'loading' ? 'block' : 'none';
+  res.style.display     = state === 'done'    ? 'block' : 'none';
 }
 
 function showError(msg) {
-  const el = document.getElementById('errorMsg');
-  el.textContent = '⚠️ ' + msg;
-  el.style.display = 'block';
+  document.getElementById('errorText').textContent = msg;
+  const b = document.getElementById('errorBox');
+  b.style.display = 'flex';
+  b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-function hideError() {
-  document.getElementById('errorMsg').style.display = 'none';
-}
+function hideError() { document.getElementById('errorBox').style.display = 'none'; }
 
-document.getElementById('btnReset').addEventListener('click', function() {
-  setUI('idle');
-  document.getElementById('resultWrap').style.display = 'none';
-  document.getElementById('progressFill').style.width = '0%';
-  document.getElementById('progressMsg').textContent = '처리 중...';
+document.getElementById('btnReset').addEventListener('click', () => {
+  setUI('idle'); updateProgress(0, '시작 중...'); hideError();
 });
 </script>
 </body>
