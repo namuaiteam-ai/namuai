@@ -80,6 +80,7 @@ def generate():
     job_dir = UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
 
+    # 이미지 (최대 6장)
     images = []
     for i in range(6):
         p = save_upload(request.files.get(f"image_{i}"), job_dir)
@@ -137,6 +138,8 @@ def status(job_id: str):
 
 @app.route("/progress/<job_id>")
 def progress_sse(job_id: str):
+    """Server-Sent Events 진행 상황 스트림"""
+
     def stream():
         import time
         sent = 0
@@ -177,6 +180,7 @@ def download(job_id: str):
 def thumbnail(job_id: str):
     thumb = UPLOAD_DIR / job_id / "thumb.jpg"
     if not thumb.exists():
+        # 영상에서 썸네일 추출
         output = UPLOAD_DIR / job_id / "output.mp4"
         if not output.exists():
             return jsonify({"error": "없음"}), 404
@@ -193,6 +197,7 @@ def thumbnail(job_id: str):
 
 @app.route("/whisper_check")
 def whisper_check():
+    """Whisper 설치 여부 확인"""
     try:
         from generate_srt import check_whisper
         installed = check_whisper()
@@ -203,6 +208,7 @@ def whisper_check():
 
 @app.route("/whisper_generate", methods=["POST"])
 def whisper_generate():
+    """오디오 파일 업로드 → Whisper SRT 자동 생성"""
     from generate_srt import check_whisper, generate_srt as _gen_srt
 
     if not check_whisper():
@@ -250,6 +256,7 @@ def whisper_generate():
 
 @app.route("/download_srt/<job_id>")
 def download_srt(job_id: str):
+    """생성된 SRT 파일 다운로드"""
     job = JOBS.get(job_id)
     if not job or not Path(job["output"]).exists():
         return jsonify({"error": "파일 없음"}), 404
