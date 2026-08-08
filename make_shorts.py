@@ -128,14 +128,12 @@ def _ts(ms: int) -> str:
 def parse_srt(path: Path) -> list[dict]:
     """SRT → [{index, start_ms, end_ms, text}, ...]"""
     text = path.read_text(encoding="utf-8-sig", errors="replace")
-    # 블록 단위 분리
     blocks = re.split(r"\n{2,}", text.strip())
     cues = []
     for block in blocks:
         lines = block.strip().splitlines()
         if len(lines) < 2:
             continue
-        # 첫 줄이 숫자이면 인덱스
         offset = 0
         if lines[0].strip().isdigit():
             offset = 1
@@ -149,7 +147,6 @@ def parse_srt(path: Path) -> list[dict]:
         if not m:
             continue
         text_lines = "\n".join(lines[offset + 1:]).strip()
-        # HTML 태그 제거
         text_lines = re.sub(r"<[^>]+>", "", text_lines)
         cues.append({
             "start_ms": _ms(m.group(1)),
@@ -188,9 +185,9 @@ def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
     outline_c = cfg.get("subtitle_outline", "&H00000000")
     bold      = int(cfg.get("subtitle_bold", 0))
 
-    SLIDE_MS = 300          # 슬라이드 구간 (ms)
-    cx       = w // 2       # 화면 중앙 x  (\an2 기준)
-    y_pos    = h - 50       # 하단 y
+    SLIDE_MS = 300
+    cx       = w // 2
+    y_pos    = h - 50
 
     def tc(ms: int) -> str:
         h_, r = divmod(ms, 3600000)
@@ -223,27 +220,22 @@ def make_scrolling_ass(cues: list[dict], w: int, h: int, cfg: dict) -> str:
         s   = cue["start_ms"]
         e   = cue["end_ms"]
         dur = e - s
-        # 2줄 → ASS 줄바꿈 \N
         text = cue["text"].replace("\n", "\\N").strip()
 
         if dur <= SLIDE_MS * 2:
-            # 큐가 너무 짧으면 fade
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(e)},Default,,0,0,0,,"
                 f"{{\\an2\\pos({cx},{y_pos})\\fad(150,150)}}{text}"
             )
         else:
-            # ① 슬라이드 인: 오른쪽 밖 → 중앙 (SLIDE_MS 동안 이동 후 중앙에 멈춤)
             events.append(
                 f"Dialogue: 0,{tc(s)},{tc(s + SLIDE_MS)},Default,,0,0,0,,"
                 f"{{\\an2\\move({x_right},{y_pos},{cx},{y_pos},0,{SLIDE_MS})}}{text}"
             )
-            # ② 중앙 유지
             events.append(
                 f"Dialogue: 0,{tc(s + SLIDE_MS)},{tc(e - SLIDE_MS)},Default,,0,0,0,,"
                 f"{{\\an2\\pos({cx},{y_pos})}}{text}"
             )
-            # ③ 슬라이드 아웃: 중앙 → 왼쪽 밖
             events.append(
                 f"Dialogue: 0,{tc(e - SLIDE_MS)},{tc(e)},Default,,0,0,0,,"
                 f"{{\\an2\\move({cx},{y_pos},{x_left},{y_pos},0,{SLIDE_MS})}}{text}"
@@ -260,14 +252,12 @@ def get_motion_filter(effect: str, index: int, w: int, h: int,
     out = f":d={total_frames}:s={w}x{h}:fps={fps},setsar=1"
 
     if effect == "pan":
-        # 좌→우 / 우→좌 교대
         sign = 1 if index % 2 == 0 else -1
         step = max(1, int(w * 0.1 / total_frames))
         x = f"'max(0,min(iw-iw/zoom,x+{sign * step}))'"
         return f"{scale}zoompan=z='1.12':x={x}:y='ih/2-(ih/zoom/2)'{out}"
 
     elif effect == "tilt":
-        # 위→아래 / 아래→위 교대
         sign = 1 if index % 2 == 0 else -1
         step = max(1, int(h * 0.1 / total_frames))
         y = f"'max(0,min(ih-ih/zoom,y+{sign * step}))'"
@@ -290,7 +280,7 @@ def get_motion_filter(effect: str, index: int, w: int, h: int,
                 f":x='iw/2-(iw/zoom/2)+sin(on*0.9)*12'"
                 f":y='ih/2-(ih/zoom/2)+cos(on*1.3)*8'{out}")
 
-    else:  # ken_burns (기본)
+    else:  # ken_burns
         z_end = 1.0 + zoom
         if index % 2 == 0:
             z_expr = f"'min(zoom+{zoom / total_frames:.6f},{z_end})'"
@@ -336,7 +326,8 @@ def concat_clips(clip_paths: list[Path], out_path: Path,
     list_file = out_path.parent / "concat_list.txt"
     with open(list_file, "w", encoding="utf-8") as f:
         for p in clip_paths:
-            f.write(f"file '{str(p.resolve()).replace(chr(92), '/')}'\n")
+            f.write(f"file '{str(p.resolve()).replace(chr(92), '/')}'
+")
 
     cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
            "-i", str(list_file), "-c", "copy", str(out_path)]
@@ -348,8 +339,6 @@ def merge_audio(video_path: Path, audio_path: Path, out_path: Path,
                 normalize: bool, audio_duration: float | None = None,
                 progress_cb=None, step=0, total_steps=1) -> Path:
     af = "loudnorm=I=-16:TP=-1.5:LRA=11" if normalize else "anull"
-    # 오디오를 마스터로: 영상을 오디오 길이에 맞춰 자름
-    # -t 로 정확한 길이 보장, -shortest 로 오디오 끝에서 종료
     cmd = ["ffmpeg", "-y",
            "-i", str(video_path),
            "-i", str(audio_path),
@@ -385,7 +374,6 @@ def add_subtitles(video_path: Path, sub_path: Path, out_path: Path,
 
     _patch_ass_style(sub_path, style)
 
-    # Windows path: forward slash for ffmpeg -vf
     sub_str = str(sub_path).replace("\\", "/").replace(":", "\\:")
     cmd = ["ffmpeg", "-y", "-i", str(video_path),
            "-vf", f"ass='{sub_str}'",
@@ -439,8 +427,6 @@ def build_shorts(images: list[str], audio: str | None,
     if audio_path:
         try:
             audio_duration = get_media_duration(audio_path)
-            # 클립마다 1초 여유를 두어 영상이 오디오보다 항상 길게 생성
-            # → 최종 단계에서 -t audio_duration 으로 정확히 트림
             cfg["photo_duration"] = round(audio_duration / n + 1.0, 3)
             cfg["_audio_duration"] = audio_duration
             if progress_cb:
@@ -450,6 +436,29 @@ def build_shorts(images: list[str], audio: str | None,
         except Exception as e:
             if progress_cb:
                 progress_cb(0, 1, f"오디오 길이 감지 실패, 설정값 사용: {e}")
+
+    # ── 자막 없으면 Whisper로 자동 생성 ──────────────────────────────────────
+    if audio_path and sub_path is None and cfg.get("auto_subtitle", False):
+        try:
+            from generate_srt import generate_srt, check_whisper
+            if check_whisper():
+                auto_srt = out_path.parent / "auto_subtitle.srt"
+                if progress_cb:
+                    progress_cb(0, 1, "Whisper 자동 자막 생성 중...")
+                generate_srt(
+                    audio_path=str(audio_path),
+                    output_srt_path=str(auto_srt),
+                    model_name=cfg.get("whisper_model", "base"),
+                    language=cfg.get("whisper_lang", "ko"),
+                    progress_cb=progress_cb,
+                )
+                sub_path = auto_srt
+            else:
+                if progress_cb:
+                    progress_cb(0, 1, "Whisper 미설치 — 자막 건너뜀 (pip install openai-whisper)")
+        except Exception as e:
+            if progress_cb:
+                progress_cb(0, 1, f"Whisper 오류: {e}")
 
     has_audio = audio_path is not None
     has_sub   = sub_path is not None
@@ -481,7 +490,6 @@ def build_shorts(images: list[str], audio: str | None,
             step += 1
 
         if sub_path:
-            # SRT/VTT → 흐르는 자막 ASS 직접 생성
             if sub_path.suffix.lower() in (".srt", ".vtt"):
                 cues = parse_srt(sub_path)
                 if cues:
@@ -514,7 +522,6 @@ def build_shorts(images: list[str], audio: str | None,
 
         audio_dur = cfg.get("_audio_duration")
         cmd_final = ["ffmpeg", "-y", "-i", str(current)]
-        # 오디오 길이로 정확히 트림 (버퍼 제거)
         if audio_dur:
             cmd_final += ["-t", f"{audio_dur:.3f}"]
         cmd_final += [

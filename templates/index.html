@@ -15,7 +15,6 @@
     padding: 0 0 60px;
   }
 
-  /* ── 헤더 ── */
   .header {
     background: #fff;
     border-bottom: 1px solid #e8e8e4;
@@ -25,16 +24,13 @@
   .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
   .header p  { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.5; }
 
-  /* ── 본문 ── */
   .main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
 
-  /* ── 섹션 제목 ── */
   .section-title {
     font-size: 13px; font-weight: 600; color: #555;
     margin: 24px 0 10px; letter-spacing: 0.2px;
   }
 
-  /* ── 업로드 카드 ── */
   .upload-card {
     background: #fff;
     border: 1.5px dashed #d4d4ce;
@@ -68,7 +64,6 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* ── 슬라이더 그리드 ── */
   .settings-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
   }
@@ -101,7 +96,6 @@
   }
   .select-hint { font-size: 11px; color: #aaa; margin-top: 5px; text-align: right; }
 
-  /* ── 효과 버튼 그리드 ── */
   .effect-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
     margin-bottom: 10px;
@@ -120,7 +114,6 @@
   .effect-btn .icon { font-size: 20px; line-height: 1; }
   .effect-btn .label { font-size: 12px; font-weight: 500; }
 
-  /* ── 자막 스타일 ── */
   .subtitle-preview {
     background: #111; border-radius: 12px 12px 0 0;
     padding: 20px 18px; min-height: 64px;
@@ -151,7 +144,6 @@
   .sub-btn:hover { border-color: #bbb; }
   .sub-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 
-  /* ── 오디오 동기화 뱃지 ── */
   .sync-badge {
     font-size: 10px; font-weight: 600;
     background: #e8f0fe; color: #4a7cf6;
@@ -166,7 +158,6 @@
   }
   .sync-info strong { font-weight: 700; }
 
-  /* ── 이미지 미리보기 그리드 ── */
   .img-preview-grid {
     display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
   }
@@ -185,7 +176,6 @@
     padding: 0;
   }
 
-  /* ── 자막 폰트/색상 설정 ── */
   .sub-style-row {
     display: flex; gap: 10px; align-items: center;
     margin-top: 10px; flex-wrap: wrap;
@@ -197,7 +187,6 @@
     border-radius: 6px; cursor: pointer; padding: 2px;
   }
 
-  /* ── 생성 버튼 ── */
   .generate-wrap { margin-top: 24px; }
   .btn-generate {
     width: 100%; padding: 16px;
@@ -209,7 +198,6 @@
   .btn-generate:hover:not(:disabled) { opacity: .85; }
   .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
 
-  /* ── 진행 ── */
   .progress-wrap {
     margin-top: 18px; display: none;
   }
@@ -225,7 +213,6 @@
     font-size: 12px; color: #888; margin-top: 8px; text-align: center;
   }
 
-  /* ── 결과 ── */
   .result-wrap {
     margin-top: 18px; display: none;
     background: #fff; border: 1px solid #e8e8e4;
@@ -256,7 +243,6 @@
     margin-left: 10px;
   }
 
-  /* ── 에러 ── */
   .error-msg {
     background: #fff0f0; border: 1px solid #ffcdd2;
     border-radius: 10px; padding: 14px 16px;
@@ -267,7 +253,6 @@
 </head>
 <body>
 
-<!-- 헤더 -->
 <div class="header">
   <h1>YouTube Shorts 영상 생성 에이전트</h1>
   <p>이미지 6장 · 나레이션 · 자막 파일을 업로드하면 ffmpeg 기반 영상을 제작합니다</p>
@@ -275,10 +260,8 @@
 
 <div class="main">
 
-  <!-- 파일 업로드 -->
   <div class="section-title">파일 업로드</div>
 
-  <!-- 이미지 -->
   <div class="upload-card" id="imgCard">
     <input type="file" id="imgInput" accept=".jpg,.jpeg,.png,.webp" multiple>
     <div class="upload-icon">🖼</div>
@@ -290,7 +273,6 @@
   </div>
   <div class="img-preview-grid" id="imgPreviews"></div>
 
-  <!-- 오디오 -->
   <div class="upload-card" id="audioCard">
     <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.aac">
     <div class="upload-icon">🎵</div>
@@ -301,7 +283,6 @@
     </div>
   </div>
 
-  <!-- 자막 -->
   <div class="upload-card" id="subCard">
     <input type="file" id="subInput" accept=".srt,.vtt,.ass">
     <div class="upload-icon">📝</div>
@@ -312,7 +293,27 @@
     </div>
   </div>
 
-  <!-- 썸네일 -->
+  <div style="background:#f8f6ff;border:1.5px solid #d4c8f8;border-radius:12px;padding:14px 16px;margin-bottom:10px" id="whisperBox">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;color:#5a3fc8;margin-bottom:6px">
+      <span>🤖 AI 자동 자막 생성 <span id="whisperBadge" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px;background:#e8e0ff;color:#5a3fc8">확인 중...</span></span>
+      <select id="whisperModel" style="font-size:12px;padding:4px 8px;border:1px solid #e0e0da;border-radius:6px;background:#fff">
+        <option value="base">base (빠름)</option>
+        <option value="small">small</option>
+        <option value="medium">medium (정확)</option>
+        <option value="large">large (최고정확)</option>
+      </select>
+    </div>
+    <div style="font-size:12px;color:#888;line-height:1.5">나레이션 오디오를 Whisper AI로 분석해 자막을 자동 생성합니다.<br>오디오 파일을 업로드 후 버튼을 클릭하세요.</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <button style="font-size:12px;padding:7px 18px;background:#6c47f5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600" id="btnWhisper" onclick="runWhisper()">자막 자동 생성</button>
+      <span style="font-size:12px;color:#666;flex:1" id="whisperStatus"></span>
+      <a id="btnDownloadSrt" style="display:none;font-size:12px;color:#4a7cf6;text-decoration:none" href="#">SRT 다운로드</a>
+    </div>
+    <div id="whisperProgBg" style="display:none;background:#e8e0ff;border-radius:4px;height:5px;margin-top:10px;overflow:hidden">
+      <div id="whisperProgFill" style="height:100%;background:#6c47f5;border-radius:4px;transition:width .4s;width:0%"></div>
+    </div>
+  </div>
+
   <div class="upload-card" id="thumbCard">
     <input type="file" id="thumbInput" accept=".jpg,.jpeg,.png">
     <div class="upload-icon">🖼</div>
@@ -323,13 +324,11 @@
     </div>
   </div>
 
-  <!-- 오디오 동기화 안내 -->
   <div class="sync-info" id="syncInfo">
     🔗 <strong>오디오 동기화 활성</strong> — 영상 길이가 오디오(<span id="syncDur">?</span>초)에 맞춰 자동 설정됩니다.
     이미지 <span id="syncImgCount">?</span>장 × <span id="syncPerImg">?</span>초 · 자막은 2줄씩 동기화됩니다.
   </div>
 
-  <!-- 영상 설정 -->
   <div class="section-title">영상 설정</div>
   <div class="settings-grid">
     <div class="settings-card">
@@ -365,7 +364,6 @@
     </div>
   </div>
 
-  <!-- 사진 움직임 효과 -->
   <div class="section-title">사진 움직임 효과</div>
   <div class="effect-grid" id="effectGrid">
     <button class="effect-btn active" data-effect="ken_burns">
@@ -388,7 +386,6 @@
     </button>
   </div>
 
-  <!-- 자막 스타일 -->
   <div class="section-title">자막 스타일</div>
   <div>
     <div class="subtitle-preview">
@@ -417,12 +414,10 @@
     </div>
   </div>
 
-  <!-- 생성 버튼 -->
   <div class="generate-wrap">
     <button class="btn-generate" id="btnGenerate">영상 제작 시작</button>
   </div>
 
-  <!-- 진행 표시 -->
   <div class="progress-wrap" id="progressWrap">
     <div class="progress-bar-bg">
       <div class="progress-bar-fill" id="progressFill"></div>
@@ -430,10 +425,8 @@
     <div class="progress-msg" id="progressMsg">처리 중...</div>
   </div>
 
-  <!-- 에러 -->
   <div class="error-msg" id="errorMsg"></div>
 
-  <!-- 결과 -->
   <div class="result-wrap" id="resultWrap">
     <h3>✅ 영상 제작 완료!</h3>
     <p id="resultInfo"></p>
@@ -442,10 +435,9 @@
     <button class="btn-reset" id="btnReset">새로 만들기</button>
   </div>
 
-</div><!-- /main -->
+</div>
 
 <script>
-// ── 이미지 파일 목록 관리 ──────────────────────────────────────────────────
 const imgFiles = [];
 
 document.getElementById('imgInput').addEventListener('change', function(e) {
@@ -480,7 +472,6 @@ function removeImg(i) {
   renderImgPreviews();
 }
 
-// ── 오디오 길이 읽기 및 동기화 UI ─────────────────────────────────────────
 let audioDuration = null;
 
 function updateSyncUI() {
@@ -508,11 +499,9 @@ function updateSyncUI() {
   }
 }
 
-// 이미지 변경시 동기화 UI도 갱신
 const _origRenderImgPreviews = renderImgPreviews;
 renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
 
-// ── 단일 파일 카드 ─────────────────────────────────────────────────────────
 ['audio','sub','thumb'].forEach(id => {
   const input = document.getElementById(id + 'Input');
   input.addEventListener('change', function() {
@@ -522,7 +511,6 @@ renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
     list.textContent = name;
     card.classList.toggle('filled', !!name);
 
-    // 오디오 파일 길이 읽기
     if (id === 'audio' && this.files[0]) {
       const audioEl = document.createElement('audio');
       audioEl.preload = 'metadata';
@@ -540,7 +528,6 @@ renderImgPreviews = function() { _origRenderImgPreviews(); updateSyncUI(); };
   });
 });
 
-// ── 슬라이더 ───────────────────────────────────────────────────────────────
 document.getElementById('duration').addEventListener('input', function() {
   document.getElementById('durationVal').textContent = this.value + '초';
 });
@@ -551,7 +538,6 @@ document.getElementById('subSize').addEventListener('input', function() {
   document.getElementById('subSizeVal').textContent = this.value;
 });
 
-// ── 효과 버튼 ──────────────────────────────────────────────────────────────
 let selectedEffect = 'ken_burns';
 document.getElementById('effectGrid').addEventListener('click', function(e) {
   const btn = e.target.closest('.effect-btn');
@@ -561,7 +547,6 @@ document.getElementById('effectGrid').addEventListener('click', function(e) {
   selectedEffect = btn.dataset.effect;
 });
 
-// ── 자막 애니메이션 버튼 ───────────────────────────────────────────────────
 let subAnim = 'scroll';
 document.querySelectorAll('.sub-btn').forEach(btn => {
   btn.addEventListener('click', function() {
@@ -573,7 +558,6 @@ document.querySelectorAll('.sub-btn').forEach(btn => {
   });
 });
 
-// ── 자막 색상 미리보기 ─────────────────────────────────────────────────────
 document.getElementById('subColor').addEventListener('input', function() {
   document.getElementById('subPreview').style.color = this.value;
 });
@@ -581,7 +565,6 @@ document.getElementById('subFont').addEventListener('change', function() {
   document.getElementById('subPreview').style.fontFamily = this.value;
 });
 
-// ── 영상 제작 ──────────────────────────────────────────────────────────────
 document.getElementById('btnGenerate').addEventListener('click', startGenerate);
 
 async function startGenerate() {
@@ -594,16 +577,13 @@ async function startGenerate() {
 
   const form = new FormData();
 
-  // 이미지 (최대 6장)
   imgFiles.forEach((f, i) => form.append(`image_${i}`, f));
 
-  // 오디오 / 자막
   const audioFile = document.getElementById('audioInput').files[0];
   const subFile   = document.getElementById('subInput').files[0];
   if (audioFile) form.append('audio',    audioFile);
   if (subFile)   form.append('subtitle', subFile);
 
-  // 설정
   const [w, h] = document.getElementById('resolution').value.split('x');
   form.append('width',      w);
   form.append('height',     h);
@@ -613,7 +593,6 @@ async function startGenerate() {
   form.append('subtitle_font', document.getElementById('subFont').value);
   form.append('subtitle_size', document.getElementById('subSize').value);
 
-  // 색상 → ASS BGR hex 변환 (#rrggbb → &H00bbggrr)
   const hex = document.getElementById('subColor').value.slice(1);
   const r = hex.slice(0,2), g = hex.slice(2,4), b = hex.slice(4,6);
   form.append('subtitle_color', `&H00${b}${g}${r}`.toUpperCase());
@@ -651,7 +630,6 @@ function listenProgress(jobId) {
 
   es.onerror = function() {
     es.close();
-    // SSE 종료 후 status API로 최종 확인
     setTimeout(() => checkStatus(jobId), 1000);
   };
 }
@@ -671,7 +649,6 @@ function showResult(jobId, msg) {
   document.getElementById('resultInfo').textContent = msg;
   document.getElementById('btnDownload').href = `/download/${jobId}`;
 
-  // 썸네일 로드
   const preview = document.getElementById('resultPreview');
   const img = document.createElement('img');
   img.src = `/thumbnail/${jobId}?t=${Date.now()}`;
@@ -680,7 +657,6 @@ function showResult(jobId, msg) {
   preview.appendChild(img);
 }
 
-// ── UI 상태 제어 ────────────────────────────────────────────────────────────
 function setUI(state) {
   const btn  = document.getElementById('btnGenerate');
   const prog = document.getElementById('progressWrap');
@@ -710,6 +686,80 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('errorMsg').style.display = 'none';
+}
+
+// ── Whisper 자동 자막 ────────────────────────────────────────────────────────
+(async function checkWhisper() {
+  try {
+    const res = await fetch('/whisper_check');
+    const d   = await res.json();
+    const badge = document.getElementById('whisperBadge');
+    if (d.installed) {
+      badge.textContent = '설치됨';
+      badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    } else {
+      badge.textContent = '미설치 (pip install openai-whisper)';
+      badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+      document.getElementById('btnWhisper').disabled = true;
+      document.getElementById('btnWhisper').style.opacity = '0.5';
+    }
+  } catch(e) {
+    document.getElementById('whisperBadge').textContent = '서버 확인 실패';
+  }
+})();
+
+async function runWhisper() {
+  const audioInput = document.getElementById('audioInput');
+  if (!audioInput.files[0]) {
+    alert('먼저 나레이션 오디오 파일을 업로드해주세요.');
+    return;
+  }
+  const btn    = document.getElementById('btnWhisper');
+  const status = document.getElementById('whisperStatus');
+  const progBg = document.getElementById('whisperProgBg');
+  const fill   = document.getElementById('whisperProgFill');
+  const dlLink = document.getElementById('btnDownloadSrt');
+
+  btn.disabled = true; btn.textContent = '분석 중...';
+  progBg.style.display = 'block';
+  dlLink.style.display = 'none';
+  status.textContent = '';
+
+  const form = new FormData();
+  form.append('audio', audioInput.files[0]);
+  form.append('model', document.getElementById('whisperModel').value);
+  form.append('language', 'ko');
+
+  try {
+    const res  = await fetch('/whisper_generate', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) { status.textContent = data.error; btn.disabled = false; btn.textContent = '자막 자동 생성'; return; }
+
+    const es = new EventSource(`/progress/${data.job_id}`);
+    es.onmessage = function(e) {
+      const d = JSON.parse(e.data);
+      fill.style.width   = d.pct + '%';
+      status.textContent = d.msg;
+      if (d.status === 'done') {
+        es.close();
+        btn.disabled = false; btn.textContent = '다시 생성';
+        dlLink.href = `/download_srt/${data.job_id}`;
+        dlLink.style.display = 'inline';
+        document.getElementById('subList').textContent = 'AI 자동 생성 자막 적용됨';
+        document.getElementById('subCard').classList.add('filled');
+        window._whisperSrtJobId = data.job_id;
+      } else if (d.status === 'error') {
+        es.close();
+        status.textContent = d.msg;
+        btn.disabled = false; btn.textContent = '자막 자동 생성';
+        progBg.style.display = 'none';
+      }
+    };
+    es.onerror = function() { es.close(); };
+  } catch(e) {
+    status.textContent = '오류: ' + e.message;
+    btn.disabled = false; btn.textContent = '자막 자동 생성';
+  }
 }
 
 document.getElementById('btnReset').addEventListener('click', function() {

@@ -80,7 +80,6 @@ def generate():
     job_dir = UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
 
-    # 이미지 (최대 6장)
     images = []
     for i in range(6):
         p = save_upload(request.files.get(f"image_{i}"), job_dir)
@@ -138,8 +137,6 @@ def status(job_id: str):
 
 @app.route("/progress/<job_id>")
 def progress_sse(job_id: str):
-    """Server-Sent Events 진행 상황 스트림"""
-
     def stream():
         import time
         sent = 0
@@ -180,7 +177,6 @@ def download(job_id: str):
 def thumbnail(job_id: str):
     thumb = UPLOAD_DIR / job_id / "thumb.jpg"
     if not thumb.exists():
-        # 영상에서 썸네일 추출
         output = UPLOAD_DIR / job_id / "output.mp4"
         if not output.exists():
             return jsonify({"error": "없음"}), 404
@@ -193,6 +189,72 @@ def thumbnail(job_id: str):
     if thumb.exists():
         return send_file(thumb, mimetype="image/jpeg")
     return jsonify({"error": "썸네일 생성 실패"}), 500
+
+
+@app.route("/whisper_check")
+def whisper_check():
+    try:
+        from generate_srt import check_whisper
+        installed = check_whisper()
+    except Exception:
+        installed = False
+    return jsonify({"installed": installed})
+
+
+@app.route("/whisper_generate", methods=["POST"])
+def whisper_generate():
+    from generate_srt import check_whisper, generate_srt as _gen_srt
+
+    if not check_whisper():
+        return jsonify({"error": "openai-whisper 미설치. pip install openai-whisper"}), 400
+
+    job_id  = uuid.uuid4().hex[:10]
+    job_dir = UPLOAD_DIR / job_id
+    job_dir.mkdir(parents=True)
+
+    audio_file = request.files.get("audio")
+    if not audio_file or not audio_file.filename:
+        return jsonify({"error": "오디오 파일이 없습니다."}), 400
+
+    audio_path = job_dir / Path(audio_file.filename).name
+    audio_file.save(audio_path)
+
+    model_name = request.form.get("model", "base")
+    language   = request.form.get("language", "ko")
+    srt_path   = job_dir / "auto_subtitle.srt"
+
+    with JOBS_LOCK:
+        JOBS[job_id] = {
+            "status": "running", "progress": 0,
+            "message": "Whisper 시작...", "log": [],
+            "output": str(srt_path), "result": None,
+        }
+
+    def _run():
+        try:
+            _gen_srt(
+                audio_path=str(audio_path),
+                output_srt_path=str(srt_path),
+                model_name=model_name,
+                language=language,
+                progress_cb=_progress_cb(job_id),
+            )
+            _update_job(job_id, status="done", progress=100,
+                        message=f"자막 생성 완료 ({srt_path.name})")
+        except Exception as e:
+            _update_job(job_id, status="error", message=str(e))
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/download_srt/<job_id>")
+def download_srt(job_id: str):
+    job = JOBS.get(job_id)
+    if not job or not Path(job["output"]).exists():
+        return jsonify({"error": "파일 없음"}), 404
+    return send_file(job["output"], as_attachment=True,
+                     download_name="auto_subtitle.srt")
 
 
 if __name__ == "__main__":
